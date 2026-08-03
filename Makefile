@@ -7,7 +7,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-online-upgrade
-PKG_VERSION:=1.0.0
+PKG_VERSION:=2.0.0
 PKG_RELEASE:=1
 # 默认构建类型为 ipk，后续在 CI 中可通过修改 .config 生成 apk
 PKG_BUILD_TYPE ?= ipk
@@ -32,7 +32,7 @@ endef
 
 define Package/luci-app-online-upgrade/description
 	Automatically check and upgrade ImmortalWrt/OpenWrt firmware
-	from GitHub Releases. Supports custom repository, release tag,
+	from GitHub Releases. Adapted for multi-device release list lookup. Supports custom repository, release tag,
 	download proxy, and configuration preservation.
 endef
 
