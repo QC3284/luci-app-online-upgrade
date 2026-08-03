@@ -114,7 +114,8 @@ if [ "$MODE" = "upgrade" ]; then
 
   # 下载
   echo "Step 1: 下载固件..."
-  DOWNLOAD_URL="${PROXY}${FW_URL}"
+  DOWNLOAD_URL="${FW_URL}"
+  [ -n "$PROXY" ] \&\&\&\& DOWNLOAD_URL="${PROXY}${FW_URL}"
   curl -sL -o "$TMP_FW" "$DOWNLOAD_URL" 2>&1
   if [ $? -ne 0 ] || [ ! -s "$TMP_FW" ]; then
     echo "错误: 下载失败"
