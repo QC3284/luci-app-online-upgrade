@@ -11,7 +11,7 @@ REPO="$(get_uci repo)"
 PROXY="$(get_uci proxy)"
 
 [ -z "$REPO" ] && REPO="QC3284/openwrt-actions"
-[ -z "$PROXY" ] && PROXY="https://ghfast.top/"
+PROXY="https://ghfast.top/"
 
 TMP_JSON="/tmp/release_list.json"
 TMP_FW="/tmp/firmware.bin"
@@ -179,5 +179,5 @@ detect_region() {
 # 国内强制启用代理
 if detect_region; then
   echo "  检测到国内网络，强制启用代理"
-  [ -z "$PROXY" ] && PROXY="https://ghfast.top/"
+  PROXY="https://ghfast.top/"
 fi
