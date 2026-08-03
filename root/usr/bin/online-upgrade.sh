@@ -39,22 +39,16 @@ echo "  设备: ${DEVICE}"
 echo "========================================"
 
 # ===== 获取最新 Release 列表 =====
-fetch_releases() {
-  local url="https://api.github.com/repos/${REPO}/releases?per_page=20"
-  local http_code
-
-  curl -sL -H "User-Agent: online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$url" 2>/dev/null
-}
 
 # ===== 查找设备对应的最新 Release =====
 find_firmware() {
-  local http_code=$(fetch_releases)
-  local tag fw_url fw_name fw_date
+  local base_url="https://api.github.com/repos/${REPO}/releases?per_page=20"
+  local url="${PROXY}${base_url}"
+  local http_code=$(curl -sL -H "User-Agent: online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$url" 2>/dev/null)
 
-  if [ "$http_code" != "200" ]; then
-    # 直连失败，尝试代理
-    local proxy_url="${PROXY}https://api.github.com/repos/${REPO}/releases?per_page=20"
-    http_code=$(curl -sL -H "User-Agent: online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$proxy_url" 2>/dev/null)
+  # 代理失败则回退直连
+  if [ "$http_code" != "200" ] && [ -n "$PROXY" ]; then
+    http_code=$(curl -sL -H "User-Agent: online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$base_url" 2>/dev/null)
   fi
 
   [ "$http_code" != "200" ] && { echo "错误: API 返回 HTTP $http_code"; return 1; }
