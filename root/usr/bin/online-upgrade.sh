@@ -43,34 +43,24 @@ echo "========================================"
 # ===== 查找设备对应的最新 Release =====
 find_firmware() {
   local base_url="https://api.github.com/repos/${REPO}/releases?per_page=20"
-  local url="${PROXY}${base_url}"
-  local http_code=$(curl -sL -H "User-Agent: online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$url" 2>/dev/null)
+  local url="$base_url"
+  local http_code tag fw_url fw_name fw_date
 
-  # 代理失败则回退直连
+  # 尝试直连
+  http_code=$(curl -sL --connect-timeout 10 -H "User-Agent: online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$url" 2>/dev/null)
+
+  # 直连失败则尝试代理
   if [ "$http_code" != "200" ] && [ -n "$PROXY" ]; then
-    http_code=$(curl -sL -H "User-Agent: online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$base_url" 2>/dev/null)
+    echo "  直连失败 (HTTP $http_code)，尝试代理..."
+    url="${PROXY}${base_url}"
+    http_code=$(curl -sL --connect-timeout 15 -H "User-Agent: online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$url" 2>/dev/null)
   fi
 
-  [ "$http_code" != "200" ] && { echo "错误: API 返回 HTTP $http_code"; return 1; }
-
-  # 找到该设备最新的 release tag
-  tag=$(jsonfilter -i "$TMP_JSON" -e '@[*].tag_name' 2>/dev/null | grep "^${DEVICE}-" | head -1)
-  [ -z "$tag" ] && { echo "错误: 未找到设备 ${DEVICE} 的 Release"; return 1; }
-  echo "  最新 Tag: ${tag}"
-
-  # 找到 sysupgrade 固件
-  fw_name=$(jsonfilter -i "$TMP_JSON" -e "@[@.tag_name=\"${tag}\"].assets[*].name" 2>/dev/null | grep "squashfs-sysupgrade" | grep -v "manifest" | head -1)
-  [ -z "$fw_name" ] && { echo "错误: 未找到 sysupgrade 固件"; return 1; }
-  echo "  固件: ${fw_name}"
-
-  fw_url=$(jsonfilter -i "$TMP_JSON" -e "@[@.tag_name=\"${tag}\"].assets[@.name=\"${fw_name}\"].browser_download_url" 2>/dev/null)
-  fw_date=$(jsonfilter -i "$TMP_JSON" -e "@[@.tag_name=\"${tag}\"].published_at" 2>/dev/null)
-
-  echo "TAG=${tag}" > /tmp/.online-upgrade.env
-  echo "FW_URL=${fw_url}" >> /tmp/.online-upgrade.env
-  echo "FW_NAME=${fw_name}" >> /tmp/.online-upgrade.env
-  echo "FW_DATE=${fw_date}" >> /tmp/.online-upgrade.env
-  return 0
+  if [ "$http_code" != "200" ]; then
+    echo "错误: GitHub API 无法访问 (HTTP $http_code)"
+    echo "提示: 请检查网络连接或尝试更换代理"
+    return 1
+  fi
 }
 
 # ===== 版本对比 =====
