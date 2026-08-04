@@ -54,7 +54,7 @@ find_firmware() {
   [ ! -s "$feed" ] && { echo "错误: 无法获取 Release 列表"; return 1; }
 
   # Atom feed <id> 格式: .../konka_komi-a31-202608041814-30885433849</id>
-  tag=$(grep -o ">${DEVICE}-[^<]*<" "$feed" 2>/dev/null | head -1 | tr -d '<>')
+  tag=$(grep -o "/${DEVICE}-[^<]*<" "$feed" 2>/dev/null | head -1 | tr -d '/<>')
   [ -z "$tag" ] && { echo "错误: 未找到设备 ${DEVICE} 的 Release"; rm -f "$feed"; return 1; }
   echo "  最新 Tag: ${tag}"
 
