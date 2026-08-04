@@ -123,17 +123,25 @@ if [ "$MODE" = "upgrade" ]; then
   fi
   echo "  下载成功 ($(du -h "$TMP_FW" | cut -f1))"
 
-  # 备份
-  echo "Step 2: 创建配置备份..."
-  TS=$(date +%Y%m%d-%H%M%S)
-  BACKUP="/tmp/pre-upgrade-backup-${TS}.tar.gz"
-  sysupgrade -b "$BACKUP"
-  if [ $? -ne 0 ] || [ ! -s "$BACKUP" ]; then
-    echo "错误: 备份失败"
-    exit 1
+  # 备份 (根据 keep_config 设置)
+  KEEP_CONFIG=$(get_uci keep_config)
+  [ -z "$KEEP_CONFIG" ] && KEEP_CONFIG="1"
+
+  if [ "$KEEP_CONFIG" = "1" ]; then
+    echo "Step 2: 创建配置备份 (keep_config=1)..."
+    TS=$(date +%Y%m%d-%H%M%S)
+    BACKUP="/tmp/pre-upgrade-backup-${TS}.tar.gz"
+    sysupgrade -b "$BACKUP"
+    if [ $? -ne 0 ] || [ ! -s "$BACKUP" ]; then
+      echo "错误: 备份失败"
+      exit 1
+    fi
+    cp "$BACKUP" "/root/pre-upgrade-backup-${TS}.tar.gz"
+    echo "  备份: /root/pre-upgrade-backup-${TS}.tar.gz"
+  else
+    echo "Step 2: 跳过配置备份 (keep_config=0, 将执行全新安装)"
+    BACKUP=""
   fi
-  cp "$BACKUP" "/root/pre-upgrade-backup-${TS}.tar.gz"
-  echo "  备份: /root/pre-upgrade-backup-${TS}.tar.gz"
 
   # 记录版本
   echo "Step 3: 记录版本..."
@@ -145,7 +153,11 @@ if [ "$MODE" = "upgrade" ]; then
   echo "Step 4: 执行 sysupgrade..."
   sync
   sleep 1
-  /sbin/sysupgrade -f "$BACKUP" "$TMP_FW"
+  if [ -n "$BACKUP" ] && [ -s "$BACKUP" ]; then
+    /sbin/sysupgrade -f "$BACKUP" "$TMP_FW"
+  else
+    /sbin/sysupgrade "$TMP_FW"
+  fi
 
   # sysupgrade 失败
   uci -q delete online-upgrade.settings.last_upgrade_ts
