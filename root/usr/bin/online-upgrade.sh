@@ -42,30 +42,35 @@ echo "========================================"
 
 # ===== 查找设备对应的最新 Release =====
 find_firmware() {
-  local page="https://github.com/${REPO}/releases"
-  local html="/tmp/releases.html"
   local tag fw_url fw_name fw_date
 
-  # 不依赖 API，直接解析 Releases 页面 HTML
-  echo "  正在获取 Releases 页面..."
-  curl -sL --connect-timeout 10 -H "User-Agent: online-upgrade" -o "$html" "$page" 2>/dev/null
-  if [ ! -s "$html" ] && [ -n "$PROXY" ]; then
-    echo "  直连失败，尝试代理..."
-    curl -sL --connect-timeout 15 -H "User-Agent: online-upgrade" -o "$html" "${PROXY}${page}" 2>/dev/null
-  fi
-  [ ! -s "$html" ] && { echo "错误: 无法获取 Releases 页面"; return 1; }
+  # 不依赖 API，直接用 GitHub Releases RSS/atom feed (XML, 稳定)
+  local atom="https://github.com/${REPO}/releases.atom"
+  local feed="/tmp/releases.xml"
 
-  tag=$(grep -o "/${REPO}/releases/download/${DEVICE}-[^/\"]*" "$html" 2>/dev/null | head -1 | sed 's|.*/download/||')
-  [ -z "$tag" ] && { echo "错误: 未找到设备 ${DEVICE} 的 Release"; rm -f "$html"; return 1; }
+  echo "  正在获取 Release 列表..."
+  curl -sL --connect-timeout 10 -H "User-Agent: online-upgrade" -o "$feed" "$atom" 2>/dev/null
+  if [ ! -s "$feed" ] && [ -n "$PROXY" ]; then
+    echo "  直连失败，尝试代理..."
+    curl -sL --connect-timeout 15 -H "User-Agent: online-upgrade" -o "$feed" "${PROXY}${atom}" 2>/dev/null
+  fi
+  [ ! -s "$feed" ] && { echo "错误: 无法获取 Release 列表"; return 1; }
+
+  # Atom feed 中每个 release 结构:
+  # <entry><id>...tag/<tag></id><title>...</title><updated>...</updated>
+  # <link rel="enclosure" href="download_url" />
+  tag=$(grep -o "<id>[^<]*</id>" "$feed" 2>/dev/null | grep "${DEVICE}-" | head -1 | sed 's|.*/||; s|</id>||')
+  [ -z "$tag" ] && { echo "错误: 未找到设备 ${DEVICE} 的 Release"; rm -f "$feed"; return 1; }
   echo "  最新 Tag: ${tag}"
 
-  fw_name=$(grep -o "/${REPO}/releases/download/${tag}/[^\"]*" "$html" 2>/dev/null | sed "s|.*/${tag}/||" | grep "squashfs-sysupgrade" | grep -v "manifest" | head -1)
-  [ -z "$fw_name" ] && { echo "错误: 未找到 sysupgrade 固件"; rm -f "$html"; return 1; }
+  # 最新 tag 的第一个 sysupgrade 文件
+  fw_url=$(grep -A200 "<id>.*${tag}<" "$feed" 2>/dev/null | grep -o 'href="[^"]*squashfs-sysupgrade[^"]*"' 2>/dev/null | grep -v "manifest" | head -1 | sed 's/href="//; s/"//')
+  [ -z "$fw_url" ] && { echo "错误: 未找到 sysupgrade 固件"; rm -f "$feed"; return 1; }
+  fw_name=$(basename "$fw_url" 2>/dev/null || echo "$fw_url" | sed 's|.*/||')
   echo "  固件: ${fw_name}"
 
-  fw_url="https://github.com/${REPO}/releases/download/${tag}/${fw_name}"
-  fw_date="$(date +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "unknown")"
-  rm -f "$html"
+  fw_date=$(grep -A5 "<id>.*${tag}<" "$feed" 2>/dev/null | grep -o "<updated>[^<]*" | head -1 | sed 's/<updated>//')
+  rm -f "$feed"
 
   echo "TAG=${tag}" > /tmp/.online-upgrade.env
   echo "FW_URL=${fw_url}" >> /tmp/.online-upgrade.env
