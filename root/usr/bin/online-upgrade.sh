@@ -42,25 +42,36 @@ echo "========================================"
 
 # ===== 查找设备对应的最新 Release =====
 find_firmware() {
-  local base_url="https://api.github.com/repos/${REPO}/releases?per_page=20"
-  local url="$base_url"
-  local http_code tag fw_url fw_name fw_date
+  local page="https://github.com/${REPO}/releases"
+  local html="/tmp/releases.html"
+  local tag fw_url fw_name fw_date
 
-  # 尝试直连
-  http_code=$(curl -sL --connect-timeout 10 -H "User-Agent: online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$url" 2>/dev/null)
-
-  # 直连失败则尝试代理
-  if [ "$http_code" != "200" ] && [ -n "$PROXY" ]; then
-    echo "  直连失败 (HTTP $http_code)，尝试代理..."
-    url="${PROXY}${base_url}"
-    http_code=$(curl -sL --connect-timeout 15 -H "User-Agent: online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$url" 2>/dev/null)
+  # 不依赖 API，直接解析 Releases 页面 HTML
+  echo "  正在获取 Releases 页面..."
+  curl -sL --connect-timeout 10 -H "User-Agent: online-upgrade" -o "$html" "$page" 2>/dev/null
+  if [ ! -s "$html" ] && [ -n "$PROXY" ]; then
+    echo "  直连失败，尝试代理..."
+    curl -sL --connect-timeout 15 -H "User-Agent: online-upgrade" -o "$html" "${PROXY}${page}" 2>/dev/null
   fi
+  [ ! -s "$html" ] && { echo "错误: 无法获取 Releases 页面"; return 1; }
 
-  if [ "$http_code" != "200" ]; then
-    echo "错误: GitHub API 无法访问 (HTTP $http_code)"
-    echo "提示: 请检查网络连接或尝试更换代理"
-    return 1
-  fi
+  tag=$(grep -o "/${REPO}/releases/download/${DEVICE}-[^/\"]*" "$html" 2>/dev/null | head -1 | sed 's|.*/download/||')
+  [ -z "$tag" ] && { echo "错误: 未找到设备 ${DEVICE} 的 Release"; rm -f "$html"; return 1; }
+  echo "  最新 Tag: ${tag}"
+
+  fw_name=$(grep -o "/${REPO}/releases/download/${tag}/[^\"]*" "$html" 2>/dev/null | sed "s|.*/${tag}/||" | grep "squashfs-sysupgrade" | grep -v "manifest" | head -1)
+  [ -z "$fw_name" ] && { echo "错误: 未找到 sysupgrade 固件"; rm -f "$html"; return 1; }
+  echo "  固件: ${fw_name}"
+
+  fw_url="https://github.com/${REPO}/releases/download/${tag}/${fw_name}"
+  fw_date="$(date +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "unknown")"
+  rm -f "$html"
+
+  echo "TAG=${tag}" > /tmp/.online-upgrade.env
+  echo "FW_URL=${fw_url}" >> /tmp/.online-upgrade.env
+  echo "FW_NAME=${fw_name}" >> /tmp/.online-upgrade.env
+  echo "FW_DATE=${fw_date}" >> /tmp/.online-upgrade.env
+  return 0
 }
 
 # ===== 版本对比 =====
@@ -87,7 +98,7 @@ if [ "$MODE" = "check" ] || [ "$MODE" = "status" ]; then
     echo ""
     echo "  已是最新。"
   fi
-  rm -f "$TMP_JSON"
+  rm -f /tmp/releases.html
   exit 0
 fi
 
