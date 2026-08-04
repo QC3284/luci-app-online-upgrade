@@ -119,10 +119,12 @@ if [ "$MODE" = "upgrade" ]; then
 
   if [ "$KEEP_CONFIG" = "1" ]; then
     echo "Step 2: 创建配置备份 (keep_config=1)..."
+    echo "backing_up" > /tmp/online-upgrade-status
     TS=$(date +%Y%m%d-%H%M%S)
     BACKUP="/tmp/pre-upgrade-backup-${TS}.tar.gz"
     sysupgrade -b "$BACKUP"
     if [ $? -ne 0 ] || [ ! -s "$BACKUP" ]; then
+      echo "failed:备份失败" > /tmp/online-upgrade-status
       echo "错误: 备份失败"
       exit 1
     fi
@@ -135,12 +137,14 @@ if [ "$MODE" = "upgrade" ]; then
 
   # 记录版本
   echo "Step 3: 记录版本..."
+  echo "saving_ts" > /tmp/online-upgrade-status
   uci set online-upgrade.settings.last_upgrade_ts="$FW_DATE"
   uci set online-upgrade.settings.last_upgrade_tag="$TAG"
   uci commit online-upgrade
 
   # 升级
   echo "Step 4: 执行 sysupgrade..."
+  echo "sysupgrade" > /tmp/online-upgrade-status
   sync
   sleep 1
   if [ -n "$BACKUP" ] && [ -s "$BACKUP" ]; then
@@ -150,6 +154,7 @@ if [ "$MODE" = "upgrade" ]; then
   fi
 
   # sysupgrade 失败
+  echo "failed:sysupgrade 执行失败" > /tmp/online-upgrade-status
   uci -q delete online-upgrade.settings.last_upgrade_ts
   uci -q delete online-upgrade.settings.last_upgrade_tag
   uci commit online-upgrade

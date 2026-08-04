@@ -20,12 +20,17 @@ keep.description = "勾选：升级前备份配置并自动恢复。取消：全
 local ver_s = m:section(NamedSection, "settings", "settings", "设备与版本")
 
 local dev = ver_s:option(DummyValue, "device", "当前设备")
-dev.value = luci.sys.exec("jsonfilter -e '@.model.id' < /etc/board.json 2>/dev/null | tr ',' '_' | tr '[:upper:]' '[:lower:]'") or "-"
+dev.value = luci.sys.exec("uci -q get online-upgrade.settings.device 2>/dev/null") or "-"
 
 local cur_ver = ver_s:option(DummyValue, "_cur_ver", "当前固件版本")
 cur_ver.value = luci.sys.exec("grep DISTRIB_REVISION /etc/openwrt_release 2>/dev/null | cut -d\\\"'\\\" -f2 | sed 's/r//'") or "-"
 local last_ver = ver_s:option(DummyValue, "last_upgrade_version", "上次升级版本")
 local last_ts = ver_s:option(DummyValue, "last_upgrade_ts", "上次升级时间")
+
+-- 清理旧版废弃字段 (tag / firmware_pattern)
+if luci.sys.call("uci -q get online-upgrade.settings.tag >/dev/null 2>&1") == 0 then
+    luci.sys.call("uci -q delete online-upgrade.settings.tag; uci -q delete online-upgrade.settings.firmware_pattern; uci commit online-upgrade")
+end
 
 -- 操作区
 local as = m:section(NamedSection, "actions", "actions", "操作")
