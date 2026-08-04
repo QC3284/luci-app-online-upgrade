@@ -1,27 +1,27 @@
-local m = Map("online-upgrade", "固件在线升级", "从 GitHub Releases 自动检测并升级固件，配置自动备份并恢复。")
+local m = Map("online-upgrade", "固件在线升级", "从 GitHub Releases 自动检测并升级固件。适配多设备矩阵编译项目。")
 
 -- 配置区
 local s = m:section(NamedSection, "settings", "settings", "仓库配置")
 
 local repo = s:option(Value, "repo", "GitHub 仓库")
-repo.default = "gooyjq/ImmortalWrt-Builder"
+repo.default = "QC3284/openwrt-actions"
 repo.rmempty = false
 
-local tag = s:option(Value, "tag", "Release 标签")
-tag.default = "Autobuild-x86-64"
-tag.rmempty = false
-
-local pattern = s:option(Value, "firmware_pattern", "固件匹配模式",
-    "用于匹配固件文件名的正则表达式")
-pattern.default = "combined-efi.*\\.img\\.gz"
-pattern.rmempty = false
-
 local proxy = s:option(Value, "proxy", "下载代理",
-    "GitHub 下载加速代理，如 https://ghfast.top/")
+    "国内用户推荐 https://ghfast.top/，海外留空")
 proxy.default = "https://ghfast.top/"
 
+local keep = s:option(Flag, "keep_config", "保留配置")
+keep.default = "1"
+keep.rmempty = false
+keep.description = "勾选：升级前备份配置并自动恢复。取消：全新安装，不保留配置。"
+
 -- 版本信息（只读）
-local ver_s = m:section(NamedSection, "settings", "settings", "版本信息")
+local ver_s = m:section(NamedSection, "settings", "settings", "设备与版本")
+
+local dev = ver_s:option(DummyValue, "device", "当前设备")
+dev.value = luci.sys.exec("jsonfilter -e '@.model.id' < /etc/board.json 2>/dev/null | tr ',' '_' | tr '[:upper:]' '[:lower:]'") or "-"
+
 local cur_ver = ver_s:option(DummyValue, "_cur_ver", "当前固件版本")
 cur_ver.value = luci.sys.exec("grep DISTRIB_REVISION /etc/openwrt_release 2>/dev/null | cut -d\\\"'\\\" -f2 | sed 's/r//'") or "-"
 local last_ver = ver_s:option(DummyValue, "last_upgrade_version", "上次升级版本")
@@ -40,7 +40,7 @@ end
 
 local upgrade_btn = as:option(Button, "upgrade", "在线更新")
 upgrade_btn.inputstyle = "action important"
-upgrade_btn.description = "备份配置（sysupgrade -b）→ 下载固件 → 刷写（自动恢复配置 -f）→ 重启"
+upgrade_btn.description = "根据「保留配置」选项，备份配置并刷写固件，或全新安装"
 function upgrade_btn.write()
     luci.sys.call("/usr/bin/online-upgrade.sh background > /dev/null 2>&1 &")
     luci.http.redirect(luci.dispatcher.build_url("admin", "system", "online_upgrade", "progress"))
