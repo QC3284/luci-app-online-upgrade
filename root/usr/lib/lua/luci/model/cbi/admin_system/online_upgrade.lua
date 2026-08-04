@@ -51,4 +51,12 @@ function upgrade_btn.write()
     luci.http.redirect(luci.dispatcher.build_url("admin", "system", "online_upgrade", "progress"))
 end
 
+local backup_btn = as:option(Button, "backup", "仅备份配置")
+backup_btn.inputstyle = "action"
+backup_btn.description = "创建当前配置的备份到 /root/ 目录，不升级固件"
+function backup_btn.write()
+    luci.sys.call("/usr/bin/online-upgrade.sh backup > /tmp/online-upgrade.log 2>&1")
+    luci.http.redirect(luci.dispatcher.build_url("admin", "system", "online_upgrade", "log"))
+end
+
 return m

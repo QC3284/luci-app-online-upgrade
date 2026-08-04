@@ -81,12 +81,14 @@ find_firmware() {
   return 0
 }
 
-# ===== 版本对比 (通过 tag 判断) =====
+# ===== 版本对比 (通过本地记录文件) =====
+VERSION_FILE="/etc/online-upgrade-version"
 is_newer() {
-  local last_tag=$(get_uci last_upgrade_tag)
   . /tmp/.online-upgrade.env 2>/dev/null
-  [ -z "$last_tag" ] && return 0
-  [ "$TAG" != "$last_tag" ] && return 0
+  [ ! -f "$VERSION_FILE" ] && return 0
+  local cur_tag=$(head -1 "$VERSION_FILE" 2>/dev/null)
+  [ -z "$cur_tag" ] && return 0
+  [ "$TAG" != "$cur_tag" ] && return 0
   return 1
 }
 
@@ -165,6 +167,7 @@ if [ "$MODE" = "upgrade" ]; then
   # 记录版本
   echo "Step 3: 记录版本..."
   echo "saving_ts" > /tmp/online-upgrade-status
+  echo "$TAG" > /etc/online-upgrade-version
   uci set online-upgrade.settings.last_upgrade_ts="$FW_DATE"
   uci set online-upgrade.settings.last_upgrade_tag="$TAG"
   uci commit online-upgrade
@@ -195,7 +198,24 @@ if [ "$MODE" = "background" ] || [ "$MODE" = "--bg" ]; then
   exit 0
 fi
 
-echo "用法: online-upgrade.sh [check|upgrade|background]"
+# ===== 仅备份 =====
+if [ "$MODE" = "backup" ] || [ "$MODE" = "--backup" ]; then
+  TS=$(date +%Y%m%d-%H%M%S)
+  BAK="/tmp/pre-upgrade-backup-${TS}.tar.gz"
+  echo "正在创建配置备份..."
+  sysupgrade -b "$BAK"
+  if [ $? -eq 0 ] && [ -s "$BAK" ]; then
+    cp "$BAK" "/root/pre-upgrade-backup-${TS}.tar.gz"
+    echo "备份成功: /root/pre-upgrade-backup-${TS}.tar.gz ($(du -h "$BAK" | cut -f1))"
+    echo "备份中包含 $(tar tzf "$BAK" 2>/dev/null | wc -l) 个文件"
+  else
+    echo "错误: 备份失败！"
+    exit 1
+  fi
+  exit 0
+fi
+
+echo "用法: online-upgrade.sh [check|upgrade|background|backup]"
 exit 1
 
 # ===== IP 检测 =====

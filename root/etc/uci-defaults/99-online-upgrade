@@ -16,4 +16,7 @@ if [ -z "$DEVICE" ]; then
 fi
 [ -n "$DEVICE" ] && uci set online-upgrade.settings.device="$DEVICE" && uci commit online-upgrade
 
+# 初始化版本文件 (后续升级会更新)
+[ ! -f /etc/online-upgrade-version ] && echo "initial-$(date +%Y%m%d%H%M%S)" > /etc/online-upgrade-version
+
 exit 0
