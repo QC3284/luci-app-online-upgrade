@@ -74,7 +74,11 @@ is_newer() {
 
 # ===== 检查模式 =====
 if [ "$MODE" = "check" ] || [ "$MODE" = "status" ]; then
-  find_firmware || exit 1
+  find_firmware
+  if [ $? -ne 0 ] || [ ! -f /tmp/.online-upgrade.env ]; then
+    echo "错误: 无法获取固件信息"
+    exit 1
+  fi
   if is_newer; then
     echo ""
     echo "  >>> 发现新固件！"
@@ -89,7 +93,11 @@ fi
 
 # ===== 升级模式 =====
 if [ "$MODE" = "upgrade" ]; then
-  find_firmware || exit 1
+  find_firmware
+  if [ $? -ne 0 ] || [ ! -f /tmp/.online-upgrade.env ]; then
+    echo "错误: 无法获取固件信息，升级中止"
+    exit 1
+  fi
   . /tmp/.online-upgrade.env
 
   if ! is_newer; then
