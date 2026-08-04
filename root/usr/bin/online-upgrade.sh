@@ -44,7 +44,7 @@ echo "========================================"
 find_firmware() {
   local atom="https://github.com/${REPO}/releases.atom"
   local feed="/tmp/releases.xml"
-  local tag fw_url fw_name fw_date
+  local tag fw_url fw_name
 
   echo "  正在获取 Release 列表..."
   curl -sL --connect-timeout 10 -H "User-Agent: online-upgrade" -o "$feed" "$atom" 2>/dev/null
@@ -57,7 +57,6 @@ find_firmware() {
   tag=$(grep -o "/${DEVICE}-[^<]*<" "$feed" 2>/dev/null | head -1 | tr -d '/<>')
   [ -z "$tag" ] && { echo "错误: 未找到设备 ${DEVICE} 的 Release"; rm -f "$feed"; return 1; }
   echo "  最新 Tag: ${tag}"
-  fw_date=$(grep -A3 "/${tag}<" "$feed" 2>/dev/null | grep "<updated>" | head -1 | sed 's/<[^>]*>//g')
   rm -f "$feed"
 
   # 从 expanded_assets 页面获取具体固件下载链接
@@ -79,16 +78,15 @@ find_firmware() {
   echo "TAG=${tag}" > /tmp/.online-upgrade.env
   echo "FW_URL=${fw_url}" >> /tmp/.online-upgrade.env
   echo "FW_NAME=${fw_name}" >> /tmp/.online-upgrade.env
-  echo "FW_DATE=${fw_date}" >> /tmp/.online-upgrade.env
   return 0
 }
 
-# ===== 版本对比 =====
+# ===== 版本对比 (通过 tag 判断) =====
 is_newer() {
-  local last_ts=$(get_uci last_upgrade_ts)
+  local last_tag=$(get_uci last_upgrade_tag)
   . /tmp/.online-upgrade.env 2>/dev/null
-  [ -z "$last_ts" ] && return 0  # 首次检测，认为有新固件
-  [ "$FW_DATE" != "$last_ts" ] && return 0
+  [ -z "$last_tag" ] && return 0
+  [ "$TAG" != "$last_tag" ] && return 0
   return 1
 }
 
