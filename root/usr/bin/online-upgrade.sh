@@ -104,6 +104,7 @@ if [ "$MODE" = "upgrade" ]; then
 
   # 下载
   echo "Step 1: 下载固件..."
+  echo "downloading" > /tmp/online-upgrade-status
   DOWNLOAD_URL="${FW_URL}"
   [ -n "$PROXY" ] && DOWNLOAD_URL="${PROXY}${FW_URL}"
   curl -sL -o "$TMP_FW" "$DOWNLOAD_URL" 2>&1
