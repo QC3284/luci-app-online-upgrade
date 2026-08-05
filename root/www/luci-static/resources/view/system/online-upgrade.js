@@ -182,7 +182,11 @@ return view.extend({
 
 		function runBackup() {
 			updateOutput('正在创建配置备份...\n');
-			fs.exec('/usr/bin/online-upgrade.sh', ['background', 'backup']); ui.addNotification(null, '备份已在后台启动', 'info'); return;).catch(function(e) {
+			fs.exec('/bin/sh', ['-c', '(/usr/bin/online-upgrade.sh backup > /tmp/online-upgrade.log 2>&1 &) && sleep 1 && echo OK']).then(function(r) {
+				updateOutput(r.stdout + (r.stderr ? '\n' + r.stderr : '') + '\n');
+				// 刷新备份信息
+				refreshBackupInfo();
+			}).catch(function(e) {
 				updateOutput('❌ 备份失败: ' + e.message + '\n');
 			});
 		}
@@ -382,6 +386,20 @@ return view.extend({
 			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
 		});
 
+		// 初始化 UCI 版本信息
+		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.device']).then(function(r) {
+			var el = document.getElementById('cfg-device');
+			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
+		});
+		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.last_upgrade_version']).then(function(r) {
+			var el = document.getElementById('latest-ver');
+			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
+		});
+		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.last_upgrade_ts']).then(function(r) {
+			var el = document.getElementById('new-ver');
+			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
+		});
+
 // ======== 构建页面 ========
 		return E('div', {'class': 'cbi-map'}, [
 			E('h2', {'class': 'cbi-page-title'}, '固件在线升级'),
@@ -431,7 +449,50 @@ return view.extend({
 					E('button', {id: 'btn-manual-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;border:1px solid #e91e63;color:#e91e63;background:transparent;', click: manualRestore, title: '从本地上传备份文件恢复'}, '📂 手动恢复'),
 					E('input', {id: 'manual-backup-file', type: 'file', accept: '.tar.gz,.tgz,.gz', style: 'display:none', change: handleManualBackupFile})
 					]),
-									E('div', {style: 'margin-top:14px;text-align:right;'}, [
+					E('div', {id: 'backup-hint', style: 'color:#999;font-size:12px;padding:4px 0;'}, '状态检查中...')
+					]),
+
+			// 仓库配置
+			E('div', {'class': 'cbi-section', style: 'margin-bottom:16px;padding:20px;'}, [
+				E('div', {style: 'font-size:16px;font-weight:600;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #eee;'}, '仓库配置'),
+				E('div', {style: 'display:flex;flex-direction:column;gap:10px;'}, [
+					E('div', {style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;'}, [
+						E('label', {style: 'min-width:100px;font-size:13px;color:#555;font-weight:500;'}, 'Release 地址'),
+						E('div', {style: 'flex:1;min-width:200px;display:flex;align-items:center;gap:6px;'}, [
+							E('input', {id: 'cfg-url', type: 'text', style: 'flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;background:var(--input-bg,transparent);', value: 'https://github.com/QC3284/openwrt-actions/releases'}),
+							E('button', {class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;', click: parseUrl}, '解析'),
+							E('span', {style: 'font-size:12px;color:#888;'}, '自动解析仓库和标签')
+						])
+					]),
+					E('div', {style: 'margin-top:4px;margin-bottom:4px;'}, [
+						E('div', {style: 'cursor:pointer;font-size:13px;color:#5e72e4;user-select:none;display:inline-flex;align-items:center;gap:4px;padding:4px 0;', click: toggleAdv}, [
+							E('span', {id: 'adv-arrow'}, '▶'),
+							' 高级配置'
+						])
+					]),
+					E('div', {id: 'adv-body', style: 'display:none;'}, [
+						E('div', {style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;'}, [
+							E('label', {style: 'min-width:100px;font-size:13px;color:#555;font-weight:500;'}, 'GitHub 仓库'),
+							E('input', {id: 'cfg-repo', type: 'text', style: 'flex:1;min-width:200px;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;background:var(--input-bg,transparent);color:#888;', value: 'QC3284/openwrt-actions', readonly: 'readonly'})
+						]),
+						E('div', {style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;'}, [
+							E('label', {style: 'min-width:100px;font-size:13px;color:#555;font-weight:500;'}, 'Release 标签'),
+							E('input', {id: 'cfg-tag', type: 'text', style: 'flex:1;min-width:200px;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;background:var(--input-bg,transparent);color:#888;', value: '', readonly: 'readonly'})
+						]),
+						E('div', {style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;'}, [
+							E('label', {style: 'min-width:100px;font-size:13px;color:#555;font-weight:500;'}, '固件匹配'),
+							E('div', {style: 'flex:1;min-width:200px;'}, [
+								E('input', {id: 'cfg-pattern', type: 'text', style: 'width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;background:var(--input-bg,transparent);color:#888;', value: 'auto（自动检测）', readonly: 'readonly'}),
+								E('div', {style: 'font-size:11px;color:#888;margin-top:2px;'}, '自动根据路由器架构匹配固件文件')
+							])
+						]),
+						E('div', {style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;'}, [
+							E('label', {style: 'min-width:100px;font-size:13px;color:#555;font-weight:500;'}, '下载代理(可选)'),
+							E('input', {id: 'cfg-proxy', type: 'text', style: 'flex:1;min-width:200px;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;background:var(--input-bg,transparent);'}, 'https://ghfast.top/')
+						])
+					])
+				]),
+				E('div', {style: 'margin-top:14px;text-align:right;'}, [
 					E('button', {class: 'btn cbi-button-save', style: 'padding:7px 20px;border-radius:4px;cursor:pointer;', click: saveCfg}, '保存配置')
 				])
 			]),
@@ -452,4 +513,4 @@ return view.extend({
 			E('pre', {id: 'upgrade-result', style: 'background:var(--cbi-section-bg,#1e1e1e);color:#d4d4d4;padding:20px;border-radius:6px;overflow:auto;max-height:400px;font-size:13px;white-space:pre-wrap;display:none;border:1px solid var(--cbi-section-border,#ddd);box-shadow:0 1px 4px rgba(0,0,0,0.06);box-sizing:border-box;width:100%;'}, '')
 		]);
 	}
-};
+});
