@@ -71,6 +71,18 @@ return view.extend({
 					m = lines[i].match(/新固件版本:\s*(.+)/);
 					if (m) {
 						var el = document.getElementById('new-ver');
+			if (el && r.stdout.trim()) {
+				var tag = r.stdout.trim();
+				var parts = tag.split('-');
+				if (parts.length >= 3) {
+					var ts = parts[parts.length-2];
+					var yr = ts.substring(0,4), mo = ts.substring(4,6), dy = ts.substring(6,8);
+					var hr = ts.substring(8,10), mn = ts.substring(10,12);
+					el.textContent = yr + '-' + mo + '-' + dy + ' ' + hr + ':' + mn + ' (#' + parts[parts.length-1].substring(0,8) + ')';
+				} else {
+					el.textContent = tag;
+				}
+			}
 						if (el) el.textContent = m[1].trim();
 					}
 					// 检测依据
@@ -367,6 +379,18 @@ return view.extend({
 		});
 		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.last_upgrade_ts']).then(function(r) {
 			var el = document.getElementById('new-ver');
+			if (el && r.stdout.trim()) {
+				var tag = r.stdout.trim();
+				var parts = tag.split('-');
+				if (parts.length >= 3) {
+					var ts = parts[parts.length-2];
+					var yr = ts.substring(0,4), mo = ts.substring(4,6), dy = ts.substring(6,8);
+					var hr = ts.substring(8,10), mn = ts.substring(10,12);
+					el.textContent = yr + '-' + mo + '-' + dy + ' ' + hr + ':' + mn + ' (#' + parts[parts.length-1].substring(0,8) + ')';
+				} else {
+					el.textContent = tag;
+				}
+			}
 			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
 		});
 
@@ -383,6 +407,18 @@ return view.extend({
 		});
 		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.last_upgrade_ts']).then(function(r) {
 			var el = document.getElementById('new-ver');
+			if (el && r.stdout.trim()) {
+				var tag = r.stdout.trim();
+				var parts = tag.split('-');
+				if (parts.length >= 3) {
+					var ts = parts[parts.length-2];
+					var yr = ts.substring(0,4), mo = ts.substring(4,6), dy = ts.substring(6,8);
+					var hr = ts.substring(8,10), mn = ts.substring(10,12);
+					el.textContent = yr + '-' + mo + '-' + dy + ' ' + hr + ':' + mn + ' (#' + parts[parts.length-1].substring(0,8) + ')';
+				} else {
+					el.textContent = tag;
+				}
+			}
 			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
 		});
 
@@ -440,7 +476,7 @@ return view.extend({
 
 			// 仓库配置
 			E('div', {'class': 'cbi-section', style: 'margin-bottom:16px;padding:20px;'}, [
-				E('div', {style: 'font-size:16px;font-weight:600;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #eee;'}, '仓库配置'),
+				E('div', {style: 'font-size:16px;font-weight:600;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #eee;', display: 'none'}, '仓库配置'),
 				E('div', {style: 'display:flex;flex-direction:column;gap:10px;'}, [
 					E('div', {style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;'}, [
 						E('label', {style: 'min-width:100px;font-size:13px;color:#555;font-weight:500;'}, 'Release 地址'),
