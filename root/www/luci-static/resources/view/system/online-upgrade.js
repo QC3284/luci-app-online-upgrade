@@ -320,7 +320,7 @@ return view.extend({
 
 		function saveCfg() {
 			var g = function(id) { return (document.getElementById(id) || {}).value || ''; };
-			var cmd = "uci set online-upgrade.settings.repo='" + g('cfg-repo').replace(/'/g,"'\\''") + "' && uci set online-upgrade.settings.tag='" + g('cfg-tag').replace(/'/g,"'\\''") + "' && uci commit online-upgrade";
+			var cmd = "uci set online-upgrade.settings.repo='" + g('cfg-repo').replace(/'/g,"'\\''") + "' &&  uci commit online-upgrade";
 			fs.exec('/bin/sh', ['-c', cmd]).then(function() {
 				ui.addNotification(null, E('p', '配置已保存'), 'info');
 			});
@@ -414,7 +414,7 @@ return view.extend({
 					E('div', {style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;'}, [
 						E('label', {style: 'min-width:100px;font-size:13px;color:#555;font-weight:500;'}, 'Release 地址'),
 						E('div', {style: 'flex:1;min-width:200px;display:flex;align-items:center;gap:6px;'}, [
-							E('input', {id: 'cfg-url', type: 'text', style: 'flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;background:var(--input-bg,transparent);', value: 'https://github.com/gooyjq/ImmortalWrt-Builder/releases/tag/Autobuild-x86-64'}),
+							E('input', {id: 'cfg-url', type: 'text', style: 'flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;background:var(--input-bg,transparent);', value: 'https://github.com/QC3284/openwrt-actions/releases'}),
 							E('button', {class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;', click: parseUrl}, '解析'),
 							E('span', {style: 'font-size:12px;color:#888;'}, '自动解析仓库和标签')
 						])
@@ -428,11 +428,11 @@ return view.extend({
 					E('div', {id: 'adv-body', style: 'display:none;'}, [
 						E('div', {style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;'}, [
 							E('label', {style: 'min-width:100px;font-size:13px;color:#555;font-weight:500;'}, 'GitHub 仓库'),
-							E('input', {id: 'cfg-repo', type: 'text', style: 'flex:1;min-width:200px;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;background:var(--input-bg,transparent);color:#888;', value: 'gooyjq/ImmortalWrt-Builder', readonly: 'readonly'})
+							E('input', {id: 'cfg-repo', type: 'text', style: 'flex:1;min-width:200px;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;background:var(--input-bg,transparent);color:#888;', value: 'QC3284/openwrt-actions', readonly: 'readonly'})
 						]),
 						E('div', {style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;'}, [
 							E('label', {style: 'min-width:100px;font-size:13px;color:#555;font-weight:500;'}, 'Release 标签'),
-							E('input', {id: 'cfg-tag', type: 'text', style: 'flex:1;min-width:200px;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;background:var(--input-bg,transparent);color:#888;', value: 'Autobuild-x86-64', readonly: 'readonly'})
+							E('input', {id: 'cfg-tag', type: 'text', style: 'flex:1;min-width:200px;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;background:var(--input-bg,transparent);color:#888;', value: '', readonly: 'readonly'})
 						]),
 						E('div', {style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;'}, [
 							E('label', {style: 'min-width:100px;font-size:13px;color:#555;font-weight:500;'}, '固件匹配'),
