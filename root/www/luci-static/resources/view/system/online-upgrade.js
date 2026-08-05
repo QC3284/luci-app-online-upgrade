@@ -182,7 +182,7 @@ return view.extend({
 
 		function runBackup() {
 			updateOutput('正在创建配置备份...\n');
-			fs.exec('/usr/bin/online-upgrade.sh', ['backup']).then(function(r) {
+			fs.exec('/usr/bin/online-upgrade.sh', ['background', 'backup']).then(function(r) {
 				updateOutput(r.stdout + (r.stderr ? '\n' + r.stderr : '') + '\n');
 				// 刷新备份信息
 				refreshBackupInfo();

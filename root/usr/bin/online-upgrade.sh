@@ -193,8 +193,11 @@ fi
 
 # ===== 后台模式 =====
 if [ "$MODE" = "background" ] || [ "$MODE" = "--bg" ]; then
-  setsid /bin/sh "$0" "upgrade" </dev/null >/tmp/online-upgrade.log 2>&1 &
-  echo "升级已在后台启动 (PID: $!)"
+  ACTION="${2:-upgrade}"
+  setsid /bin/sh "$0" "$ACTION" </dev/null >/tmp/online-upgrade.log 2>&1 &
+  echo "${ACTION} 已在后台启动 (PID: $!)"
+  exit 0
+fi
   exit 0
 fi
 
