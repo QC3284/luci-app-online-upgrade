@@ -182,7 +182,7 @@ return view.extend({
 
 		function runBackup() {
 			updateOutput('正在创建配置备份...\n');
-			fs.exec('/bin/sh', ['-c', '(/usr/bin/online-upgrade.sh backup > /tmp/online-upgrade.log 2>&1 &) && sleep 1 && echo OK']).then(function(r) {
+			fs.exec('/usr/bin/online-upgrade.sh', ['backup']).then(function(r) {
 				updateOutput(r.stdout + (r.stderr ? '\n' + r.stderr : '') + '\n');
 				// 刷新备份信息
 				refreshBackupInfo();
@@ -371,20 +371,6 @@ return view.extend({
 		});
 
 
-
-		// 初始化 UCI 版本信息
-		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.device']).then(function(r) {
-			var el = document.getElementById('cfg-device');
-			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
-		});
-		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.last_upgrade_version']).then(function(r) {
-			var el = document.getElementById('latest-ver');
-			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
-		});
-		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.last_upgrade_ts']).then(function(r) {
-			var el = document.getElementById('new-ver');
-			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
-		});
 
 		// 初始化 UCI 版本信息
 		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.device']).then(function(r) {
