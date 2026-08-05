@@ -182,11 +182,7 @@ return view.extend({
 
 		function runBackup() {
 			updateOutput('正在创建配置备份...\n');
-			fs.exec('/usr/bin/online-upgrade.sh', ['background', 'backup']).then(function(r) {
-				updateOutput(r.stdout + (r.stderr ? '\n' + r.stderr : '') + '\n');
-				// 刷新备份信息
-				refreshBackupInfo();
-			}).catch(function(e) {
+			fs.exec('/usr/bin/online-upgrade.sh', ['background', 'backup']); ui.addNotification(null, '备份已在后台启动', 'info'); return;).catch(function(e) {
 				updateOutput('❌ 备份失败: ' + e.message + '\n');
 			});
 		}
@@ -456,4 +452,4 @@ return view.extend({
 			E('pre', {id: 'upgrade-result', style: 'background:var(--cbi-section-bg,#1e1e1e);color:#d4d4d4;padding:20px;border-radius:6px;overflow:auto;max-height:400px;font-size:13px;white-space:pre-wrap;display:none;border:1px solid var(--cbi-section-border,#ddd);box-shadow:0 1px 4px rgba(0,0,0,0.06);box-sizing:border-box;width:100%;'}, '')
 		]);
 	}
-});
+};
