@@ -182,6 +182,11 @@ return view.extend({
 		function runForceUpgrade() { startUpgrade(true); }
 
 		function runBackup() {
+			ui.addNotification(null, '备份已启动，即将跳转至日志', 'info');
+			fs.exec('/bin/sh', ['-c', '/usr/bin/online-upgrade.sh backup > /tmp/online-upgrade.log 2>&1 &']);
+			setTimeout(function() { window.location.href = L.url('admin/system/online_upgrade/log'); }, 2000);
+			return;
+			/* old callback removed
 			updateOutput('正在创建配置备份...\n');
 			fs.exec('/usr/bin/online-upgrade.sh', ['backup']).then(function(r) {
 				updateOutput(r.stdout + (r.stderr ? '\n' + r.stderr : '') + '\n');
