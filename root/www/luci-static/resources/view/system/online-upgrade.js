@@ -182,10 +182,8 @@ return view.extend({
 		function runForceUpgrade() { startUpgrade(true); }
 
 		function runBackup() {
-			ui.addNotification(null, '备份已启动，即将跳转至日志', 'info');
-			fs.exec('/bin/sh', ['-c', '/usr/bin/online-upgrade.sh backup > /tmp/online-upgrade.log 2>&1 &']);
-			setTimeout(function() { window.location.href = L.url('admin/system/online_upgrade/log'); }, 2000);
-			return;function(r) {
+			updateOutput('正在创建配置备份...\n');
+			fs.exec('/usr/bin/online-upgrade.sh', ['backup']).then(function(r) {
 				updateOutput(r.stdout + (r.stderr ? '\n' + r.stderr : '') + '\n');
 				// 刷新备份信息
 				refreshBackupInfo();
@@ -462,4 +460,4 @@ return view.extend({
 			E('pre', {id: 'upgrade-result', style: 'background:var(--cbi-section-bg,#1e1e1e);color:#d4d4d4;padding:20px;border-radius:6px;overflow:auto;max-height:400px;font-size:13px;white-space:pre-wrap;display:none;border:1px solid var(--cbi-section-border,#ddd);box-shadow:0 1px 4px rgba(0,0,0,0.06);box-sizing:border-box;width:100%;'}, '')
 		]);
 	}
-};
+});
