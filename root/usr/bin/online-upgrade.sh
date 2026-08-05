@@ -209,8 +209,12 @@ if [ "$MODE" = "backup" ] || [ "$MODE" = "--backup" ]; then
     cp "$BAK" "/root/pre-upgrade-backup-${TS}.tar.gz"
     echo "备份成功: /root/pre-upgrade-backup-${TS}.tar.gz ($(du -h "$BAK" | cut -f1))"
     echo "备份中包含 $(tar tzf "$BAK" 2>/dev/null | wc -l) 个文件"
-    # 清理旧备份，保留最新 5 个
-    ls -t /root/pre-upgrade-backup-*.tar.gz 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null
+    # 清理旧备份，保留最新 3 个
+    OLD=$(ls -t /root/pre-upgrade-backup-*.tar.gz 2>/dev/null | tail -n +4)
+    if [ -n "$OLD" ]; then
+      echo "$OLD" | xargs rm -f 2>/dev/null
+      echo "  已清理 $(echo "$OLD" | wc -l) 个旧备份"
+    fi
   else
     echo "错误: 备份失败！"
     exit 1
