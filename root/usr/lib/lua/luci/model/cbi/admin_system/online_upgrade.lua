@@ -24,10 +24,8 @@ dev.value = luci.sys.exec("uci -q get online-upgrade.settings.device 2>/dev/null
 
 local cur_ver = ver_s:option(DummyValue, "_cur_ver", "当前固件版本")
 cur_ver.value = luci.sys.exec("grep DISTRIB_REVISION /etc/openwrt_release 2>/dev/null | cut -d\\\"'\\\" -f2 | sed 's/r//'") or "-"
-local last_ver = ver_s:option(Value, "last_upgrade_version", "当前固件版本")
-last_ver.readonly = true
-local last_ts = ver_s:option(Value, "last_upgrade_ts", "上次升级时间")
-last_ts.readonly = true
+local last_ver = ver_s:option(DummyValue, "last_upgrade_version", "当前固件版本")
+local last_ts = ver_s:option(DummyValue, "last_upgrade_ts", "上次升级时间")
 
 -- 清理旧版废弃字段 (tag / firmware_pattern)
 if luci.sys.call("uci -q get online-upgrade.settings.tag >/dev/null 2>&1") == 0 then
