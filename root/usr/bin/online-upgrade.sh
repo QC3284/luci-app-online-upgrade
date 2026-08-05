@@ -198,8 +198,6 @@ if [ "$MODE" = "background" ] || [ "$MODE" = "--bg" ]; then
   echo "${ACTION} 已在后台启动 (PID: $!)"
   exit 0
 fi
-  exit 0
-fi
 
 # ===== 仅备份 =====
 if [ "$MODE" = "backup" ] || [ "$MODE" = "--backup" ]; then
