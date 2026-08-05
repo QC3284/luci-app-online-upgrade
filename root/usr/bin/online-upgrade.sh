@@ -81,15 +81,22 @@ find_firmware() {
   return 0
 }
 
-# ===== 版本对比 (通过本地记录文件) =====
-VERSION_FILE="/etc/online-upgrade-version"
+# ===== 版本对比 (通过固件内置版本文件 + 在线 TAG) =====
+VERSION_FILE="/etc/firmware-build-info"
 is_newer() {
   . /tmp/.online-upgrade.env 2>/dev/null
-  [ ! -f "$VERSION_FILE" ] && return 0
-  local cur_tag=$(head -1 "$VERSION_FILE" 2>/dev/null)
-  [ -z "$cur_tag" ] && return 0
-  [ "$TAG" != "$cur_tag" ] && return 0
-  return 1
+  # 从固件内版本文件提取构建时间戳 (格式: device YYYYMMDDHHMMSS run_id)
+  if [ -f "$VERSION_FILE" ]; then
+    local cur_ts=$(awk '{print $2}' "$VERSION_FILE" 2>/dev/null)
+    # 从在线 TAG 提取时间戳 (格式: device-YYYYMMDDHHMM-run_id)
+    local new_ts=$(echo "$TAG" | grep -o '[0-9]\{12\}' | head -1)
+    if [ -n "$cur_ts" ] && [ -n "$new_ts" ]; then
+      [ "$cur_ts" -lt "$new_ts" ] 2>/dev/null && return 0
+      return 1
+    fi
+  fi
+  # 回退：无版本文件，首次检测认为有新固件
+  return 0
 }
 
 # ===== 检查模式 =====
@@ -167,7 +174,7 @@ if [ "$MODE" = "upgrade" ]; then
   # 记录版本
   echo "Step 3: 记录版本..."
   echo "saving_ts" > /tmp/online-upgrade-status
-  echo "$TAG" > /etc/online-upgrade-version
+  echo "$TAG" > "$VERSION_FILE"
   uci set online-upgrade.settings.last_upgrade_ts="$FW_DATE"
   uci set online-upgrade.settings.last_upgrade_tag="$TAG"
   uci commit online-upgrade
