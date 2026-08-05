@@ -355,7 +355,23 @@ return view.extend({
 			refreshBackupInfo();
 		}, 100);
 
-		// ======== 构建页面 ========
+		
+		// 初始化 UCI 版本信息
+		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.device']).then(function(r) {
+			var el = document.getElementById('cfg-device');
+			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
+		});
+		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.last_upgrade_version']).then(function(r) {
+			var el = document.getElementById('latest-ver');
+			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
+		});
+		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.last_upgrade_ts']).then(function(r) {
+			var el = document.getElementById('new-ver');
+			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
+		});
+
+
+// ======== 构建页面 ========
 		return E('div', {'class': 'cbi-map'}, [
 			E('h2', {'class': 'cbi-page-title'}, '固件在线升级'),
 
