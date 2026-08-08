@@ -13,7 +13,7 @@ info:option(DummyValue, "device", "设备")
 info:option(DummyValue, "last_upgrade_version", "固件版本")
 info:option(DummyValue, "last_upgrade_ts", "构建序号")
 
-local act = m:section(NamedSection, "actions", "actions", "操作")
+local act = m:section(SimpleSection, nil, "操作")
 
 local c = act:option(Button, "check", "检查更新")
 c.inputstyle = "action"

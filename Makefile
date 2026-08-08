@@ -83,6 +83,7 @@ define Package/luci-app-online-upgrade/install
 		$(1)/www/luci-static/resources/view/system/online-upgrade.js
 
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/i18n
+	$(INSTALL_DATA) ./po/zh-cn/online-upgrade.po $(1)/usr/lib/lua/luci/i18n/online-upgrade.zh-cn.po
 endef
 
 define Package/luci-app-online-upgrade/postinst

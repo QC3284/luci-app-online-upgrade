@@ -7,29 +7,50 @@
 
 logger -t "online-upgrade" "检测到插件丢失，正在尝试自动重装..."
 
-# 1. 尝试从包列表恢复
+# 1. 尝试从包列表恢复 (支持 apk 和 opkg)
 if [ -f /root/.pkg-list.txt ]; then
 	logger -t "online-upgrade" "从包列表恢复中..."
 	while read -r pkg; do
 		[ -z "$pkg" ] && continue
-		# 跳过已存在的包
-		apk info -e "$pkg" 2>/dev/null && continue
-		apk add "$pkg" 2>/dev/null && logger -t "online-upgrade" "已安装: $pkg"
+		# 尝试 apk (ImmortalWrt 25.12+)
+		if command -v apk >/dev/null 2>&1; then
+			apk info -e "$pkg" 2>/dev/null && continue
+			apk add "$pkg" 2>/dev/null && logger -t "online-upgrade" "已安装: $pkg"
+		# 回退 opkg (OpenWrt 23.05 及更早)
+		elif command -v opkg >/dev/null 2>&1; then
+			opkg list-installed "$pkg" 2>/dev/null | grep -q "$pkg" && continue
+			opkg install "$pkg" 2>/dev/null && logger -t "online-upgrade" "已安装: $pkg"
+		fi
 	done < /root/.pkg-list.txt
 fi
 
 # 2. 如果插件还是没装上，从 GitHub 下载最新 Release
 if [ ! -f /usr/bin/online-upgrade.sh ]; then
 	logger -t "online-upgrade" "从 GitHub 下载最新插件..."
-	# 查找最新 .apk 下载地址
-	RELEASE_JSON=$(curl -sL --connect-timeout 10 \
-		"https://api.github.com/repos/gooyjq/luci-app-online-upgrade/releases/latest" 2>/dev/null)
+	# 读取代理配置
+	PROXY=$(uci -q get online-upgrade.settings.proxy 2>/dev/null)
+		[ -z "$PROXY" ] && PROXY="https://ghfast.top/"
+		# 确保代理 URL 以 / 结尾
+		[ -n "$PROXY" ] && PROXY="${PROXY%/}/"
+	GH_API="https://api.github.com/repos/gooyjq/luci-app-online-upgrade/releases/latest"
+	RELEASE_JSON=$(curl -sL --connect-timeout 10 "$GH_API" 2>/dev/null)
+	if [ -z "$RELEASE_JSON" ] || echo "$RELEASE_JSON" | grep -q 'rate limit'; then
+		RELEASE_JSON=$(curl -sL --connect-timeout 15 "${PROXY}${GH_API}" 2>/dev/null)
+	fi
 	APK_URL=$(echo "$RELEASE_JSON" | jsonfilter -e "@.assets[*].browser_download_url" 2>/dev/null | grep -E '\.apk$' | head -1)
 	
 	if [ -n "$APK_URL" ]; then
-		curl -sL --connect-timeout 30 -o /tmp/luci-app-online-upgrade.apk "$APK_URL" 2>/dev/null
+			# 先直连下载，失败再走代理
+			curl -sL --connect-timeout 30 -o /tmp/luci-app-online-upgrade.apk "$APK_URL" 2>/dev/null
+			if [ ! -s /tmp/luci-app-online-upgrade.apk ] && [ -n "$PROXY" ]; then
+				curl -sL --connect-timeout 45 -o /tmp/luci-app-online-upgrade.apk "${PROXY}${APK_URL}" 2>/dev/null
+			fi
 		if [ -s /tmp/luci-app-online-upgrade.apk ]; then
-			apk add --allow-untrusted /tmp/luci-app-online-upgrade.apk 2>/dev/null
+			if command -v apk >/dev/null 2>&1; then
+				apk add --allow-untrusted /tmp/luci-app-online-upgrade.apk 2>/dev/null
+			elif command -v opkg >/dev/null 2>&1; then
+				opkg install /tmp/luci-app-online-upgrade.apk 2>/dev/null
+			fi
 			rm -f /tmp/luci-app-online-upgrade.apk
 			if [ -f /usr/bin/online-upgrade.sh ]; then
 				logger -t "online-upgrade" "✅ 自动重装成功"

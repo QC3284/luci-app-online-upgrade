@@ -71,7 +71,6 @@ return view.extend({
 					m = lines[i].match(/新固件版本:\s*(.+)/);
 					if (m) {
 						var el = document.getElementById('new-ver');
-			if (el && r.stdout.trim()) { el.textContent = r.stdout.trim(); }
 						if (el) el.textContent = m[1].trim();
 					}
 					// 检测依据
@@ -149,7 +148,9 @@ return view.extend({
 				}
 			}, 2000);
 
-			fs.exec('/usr/bin/online-upgrade.sh', ['background']);
+			var bgArgs = ['background', 'upgrade'];
+			if (isForce) bgArgs.push('--force');
+			fs.exec('/usr/bin/online-upgrade.sh', bgArgs);
 
 			var pollFails = 0;
 			if (pollTimer) clearInterval(pollTimer);
@@ -307,52 +308,41 @@ return view.extend({
 			if (el) { el.style.display = 'block'; el.textContent += t; }
 		}
 
-		function parseUrl() {
-			var url = document.getElementById('cfg-url').value.trim();
-			var m = url.match(/github\.com\/([^\/]+\/[^\/]+)\/releases\/tag\/([^\/\s?#]+)/);
-			if (m) {
-				document.getElementById('cfg-repo').value = m[1];
-				document.getElementById('cfg-tag').value = m[2];
-				ui.addNotification(null, E('p', '已解析: 仓库=' + m[1] + ', 标签=' + m[2]), 'info');
-			} else {
-				ui.addNotification(null, E('p', 'URL 格式不正确'));
-			}
-		}
 
-		function saveCfg() {
-			var g = function(id) { return (document.getElementById(id) || {}).value || ''; };
-			var cmd = "uci set online-upgrade.settings.repo='" + g('cfg-repo').replace(/'/g,"'\\''") + "' &&  uci commit online-upgrade";
-			fs.exec('/bin/sh', ['-c', cmd]).then(function() {
-				ui.addNotification(null, E('p', '配置已保存'), 'info');
-			});
-		}
+		// 读取当前固件构建版本 (从 /etc/firmware-build-info)
+			setTimeout(function() {
+				fs.exec('/bin/cat', ['/etc/firmware-build-info']).then(function(r) {
+					var parts = (r.stdout || '').trim().split(/\s+/);
+					if (parts.length >= 2 && /^[0-9]{8,}$/.test(parts[1])) {
+						var devEl = document.getElementById('cur-device');
+						var verEl = document.getElementById('cur-ver');
+						var revEl = document.getElementById('cur-rev');
 
-		function toggleAdv() {
-			var body = document.getElementById('adv-body');
-			var arrow = document.getElementById('adv-arrow');
-			if (!body) return;
-			var hidden = body.style.display === 'none';
-			body.style.display = hidden ? 'block' : 'none';
-			if (arrow) arrow.textContent = hidden ? '▼' : '▶';
-		}
+						if (devEl && parts[0]) devEl.textContent = parts[0];
 
-		// 读取当前版本和备份状态
-		setTimeout(function() {
-			fs.exec('/bin/cat', ['/etc/openwrt_release']).then(function(r) {
-				var lines = (r.stdout || '').split('\n');
-				for (var i = 0; i < lines.length; i++) {
-					var m = lines[i].match(/DISTRIB_RELEASE='([^']+)'/);
-					if (m) {
-						var el = document.getElementById('cur-ver');
-						if (el) el.textContent = m[1];
+						// 格式化时间戳: YYYYMMDDHHMMSS → YYYY-MM-DD HH:MM:SS
+						var ts = parts[1];
+						if (verEl && ts.length >= 12) {
+							var y  = ts.substring(0, 4);
+							var mo = ts.substring(4, 6);
+							var d  = ts.substring(6, 8);
+							var h  = ts.substring(8, 10);
+							var mi = ts.substring(10, 12);
+							var s  = ts.length >= 14 ? ts.substring(12, 14) : '';
+							verEl.textContent = y + '-' + mo + '-' + d + ' ' + h + ':' + mi + (s ? ':' + s : '');
+						}
+
+						if (revEl && parts[2]) revEl.textContent = '#' + parts[2];
+					} else {
+						// 回退: 尝试 UCI
+						throw new Error('bad format');
 					}
-					m = lines[i].match(/DISTRIB_REVISION='r?([^']+)'/);
-					if (m) {
-						var el = document.getElementById('cur-rev');
-						if (el) el.textContent = 'r' + m[1];
-					}
-				}
-			});
+				}).catch(function() {
+					var devEl = document.getElementById('cur-device');
+					if (devEl) devEl.textContent = '未知';
+					var verEl = document.getElementById('cur-ver');
+					if (verEl) verEl.textContent = '';
+				});
 			refreshBackupInfo();
 		}, 100);
 
@@ -368,24 +358,6 @@ return view.extend({
 		});
 		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.last_upgrade_ts']).then(function(r) {
 			var el = document.getElementById('new-ver');
-			if (el && r.stdout.trim()) { el.textContent = r.stdout.trim(); }
-			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
-		});
-
-
-
-		// 初始化 UCI 版本信息
-		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.device']).then(function(r) {
-			var el = document.getElementById('cfg-device');
-			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
-		});
-		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.last_upgrade_version']).then(function(r) {
-			var el = document.getElementById('latest-ver');
-			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
-		});
-		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.last_upgrade_ts']).then(function(r) {
-			var el = document.getElementById('new-ver');
-			if (el && r.stdout.trim()) { el.textContent = r.stdout.trim(); }
 			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
 		});
 
@@ -401,11 +373,11 @@ return view.extend({
 				]),
 				E('div', {style: 'font-size:14px;margin-bottom:12px;'}, [
 					E('div', {style: 'padding:4px 0;'}, [
-						E('span', {style: 'color:#666;display:inline-block;width:80px;'}, '当前版本'),
-						E('span', {style: 'font-weight:600;'}, 'ImmortalWrt '),
-						E('span', {id: 'cur-ver', style: 'font-weight:600;'}, '加载中...'),
-						E('span', {id: 'cur-rev', style: 'color:#888;margin-left:4px;font-size:12px;'}, '')
-					]),
+							E('span', {style: 'color:#666;display:inline-block;width:80px;'}, '当前版本'),
+							E('span', {id: 'cur-device', style: 'font-weight:600;'}, '加载中...'),
+							E('span', {id: 'cur-ver', style: 'color:#888;margin-left:4px;font-size:13px;'}, ''),
+							E('span', {id: 'cur-rev', style: 'color:#aaa;margin-left:4px;font-size:11px;'}, '')
+						]),
 					E('div', {style: 'padding:4px 0;'}, [
 						E('span', {style: 'color:#666;display:inline-block;width:80px;'}, '最新版本'),
 						E('span', {id: 'latest-ver'}, '-'),
@@ -438,11 +410,8 @@ return view.extend({
 					E('button', {id: 'btn-manual-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;border:1px solid #e91e63;color:#e91e63;background:transparent;', click: manualRestore, title: '从本地上传备份文件恢复'}, '📂 手动恢复'),
 					E('input', {id: 'manual-backup-file', type: 'file', accept: '.tar.gz,.tgz,.gz', style: 'display:none', change: handleManualBackupFile})
 					]),
-					[],
-				E('div', {style: 'margin-top:14px;text-align:right;'}, [
-					E('button', {class: 'btn cbi-button-save', style: 'padding:7px 20px;border-radius:4px;cursor:pointer;', click: saveCfg}, '保存配置')
-				])
-			]),
+					E('div', {id: 'backup-hint', style: 'margin-top:10px;font-size:13px;color:#999;'}, ''),
+				]),
 
 			// 进度条
 			E('div', {id: 'progress-area', style: 'display:none;margin-bottom:16px;'}, [

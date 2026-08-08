@@ -2,7 +2,6 @@
 # uci-defaults for luci-app-online-upgrade — 适配 openwrt-actions
 
 uci -q batch <<-EOF
-	set online-upgrade.settings.enabled='0'
 	set online-upgrade.settings.repo='QC3284/openwrt-actions'
 	set online-upgrade.settings.proxy='https://ghfast.top/'
 	set online-upgrade.settings.keep_config='1'
@@ -17,6 +16,17 @@ fi
 [ -n "$DEVICE" ] && uci set online-upgrade.settings.device="$DEVICE" && uci commit online-upgrade
 
 # 初始化版本文件 (后续升级会更新)
-[ ! -f /etc/online-upgrade-version ] && echo "initial-$(date +%Y%m%d%H%M%S)" > /etc/online-upgrade-version
+if [ ! -f /etc/firmware-build-info ]; then
+  echo "${DEVICE} $(date +%Y%m%d%H%M%S) initial" > /etc/firmware-build-info
+fi
+
+# 从固件版本文件初始化 UCI 显示字段，格式与升级脚本保持一致
+if [ -f /etc/firmware-build-info ]; then
+  CUR_TS=$(awk '{print $2}' /etc/firmware-build-info 2>/dev/null | grep -o '[0-9]\{12\}' | head -1)
+  CUR_RUNID=$(awk '{print $3}' /etc/firmware-build-info 2>/dev/null)
+  [ -n "$CUR_TS" ] && uci set online-upgrade.settings.last_upgrade_ts="$CUR_TS"
+  [ -n "$CUR_TS" ] && uci set online-upgrade.settings.last_upgrade_version="${DEVICE}-${CUR_TS}-${CUR_RUNID}"
+  uci commit online-upgrade
+fi
 
 exit 0

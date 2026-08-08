@@ -28,9 +28,7 @@ function action_download()
 	end
 
 	local filename = filepath:match("[^/]+$")
-	luci.http.header("Content-Type", "application/gzip")
 	luci.http.header("Content-Disposition", 'attachment; filename="' .. filename .. '"')
-
 	luci.http.prepare_content("application/gzip")
 	local f = io.open(filepath, "rb")
 	if f then
