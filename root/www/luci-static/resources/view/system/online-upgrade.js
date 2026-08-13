@@ -152,11 +152,9 @@ return view.extend({
 			if (isForce) bgArgs.push('--force');
 			fs.exec('/usr/bin/online-upgrade.sh', bgArgs);
 
-			var pollFails = 0;
 			if (pollTimer) clearInterval(pollTimer);
 			pollTimer = setInterval(function() {
 				fs.exec('/bin/cat', ['/tmp/online-upgrade-status']).then(function(r) {
-					pollFails = 0;
 					var status = (r.stdout || '').trim();
 					if (status.indexOf('failed:') === 0) {
 						clearInterval(interval);
@@ -208,10 +206,10 @@ return view.extend({
 					hint.innerHTML = '';
 					hint.style.color = '#4CAF50';
 					var link = E('a', {
-						href: '/cgi-bin/luci/admin/system/online_upgrade/download',
-						style: 'color:#4CAF50;text-decoration:none;',
-						target: '_blank'
-					}, '✅ 备份文件: ' + name + ' | ' + ts + ' | ' + size);
+							href: (function() { var p = window.location.pathname.match(/^\/.*\/admin/) || ['/cgi-bin/luci/admin']; var b = p[0].replace('/admin', ''); return b + '/admin/system/online_upgrade/download'; })(),
+							style: 'color:#4CAF50;text-decoration:none;',
+							target: '_blank'
+						}, '✅ 备份文件: ' + name + ' | ' + ts + ' | ' + size);
 					hint.appendChild(link);
 					if (dlBtn) dlBtn.style.display = 'inline-block';
 				} else {
@@ -348,11 +346,7 @@ return view.extend({
 
 		
 		// 初始化 UCI 版本信息
-		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.device']).then(function(r) {
-			var el = document.getElementById('cfg-device');
-			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
-		});
-		fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.last_upgrade_version']).then(function(r) {
+			fs.exec('uci', ['-q', 'get', 'online-upgrade.settings.last_upgrade_version']).then(function(r) {
 			var el = document.getElementById('latest-ver');
 			if (el && r.stdout.trim()) el.textContent = r.stdout.trim();
 		});

@@ -93,16 +93,22 @@ find_firmware() {
   fi
 
   if [ -s "$json" ]; then
+    # 检测限速错误 (GitHub API 未认证 60次/小时)
+    if grep -q 'rate limit' "$json" 2>/dev/null; then
+      echo "错误: GitHub API 访问超60次/小时受限"
+      rm -f "$json"
+      return 1
+    fi
     # 从 JSON 中找到匹配设备的第一个 release tag
     tag=$(grep -o '"tag_name": *"[^"]*"' "$json" 2>/dev/null \
       | grep "${DEVICE}-" | head -1 \
       | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
     if [ -n "$tag" ]; then
       echo "  最新 Tag: ${tag}"
-      # 从同一 release 的 assets 中提取 sysupgrade 固件下载链接
-      fw_url=$(awk "/\"tag_name\": *\"${tag}\"/,/\"tag_name\"/" "$json" 2>/dev/null \
-        | grep -o '"browser_download_url": *"[^"]*squashfs-sysupgrade[^"]*"' \
-        | grep -v manifest | head -1 \
+      # 从 assets 中提取 sysupgrade 固件下载链接 (URL 路径包含 /download/<tag>/)
+      fw_url=$(grep -o '"browser_download_url": *"[^"]*"' "$json" 2>/dev/null \
+        | grep "/download/${tag}/" \
+        | grep "squashfs-sysupgrade" | grep -v manifest | head -1 \
         | sed 's/.*"browser_download_url": *"\([^"]*\)".*/\1/')
       rm -f "$json"
       if [ -n "$fw_url" ]; then
@@ -230,17 +236,17 @@ if [ "$MODE" = "upgrade" ]; then
   echo "Step 1: 下载固件..."
   echo "downloading" > /tmp/online-upgrade-status
   echo "  正在下载: ${FW_NAME}"
-  # 先直连下载，失败再走代理
-  curl -sL --connect-timeout 30 -o "$TMP_FW" "$FW_URL" 2>&1
+  # 先直连下载，失败再走代理 (-f: HTTP 错误视为失败, -L: 跟随重定向)
+  curl -fsL --connect-timeout 30 --retry 3 --retry-delay 5 -o "$TMP_FW" "$FW_URL" 2>&1
   DOWNLOAD_OK=$?
-  if [ $DOWNLOAD_OK -ne 0 ] || [ ! -s "$TMP_FW" ]; then
+  if [ $DOWNLOAD_OK -ne 0 ] || [ ! -s "$TMP_FW" ] || grep -Eq '^(<html|<!DOCTYPE)' "$TMP_FW" 2>/dev/null; then
     if [ -n "$PROXY" ]; then
       echo "  直连失败，尝试代理下载..."
-      curl -sL --connect-timeout 60 -o "$TMP_FW" "${PROXY}${FW_URL}" 2>&1
+      curl -fsL --connect-timeout 60 --retry 3 --retry-delay 5 -o "$TMP_FW" "${PROXY}${FW_URL}" 2>&1
       DOWNLOAD_OK=$?
     fi
   fi
-  if [ $DOWNLOAD_OK -ne 0 ] || [ ! -s "$TMP_FW" ]; then
+  if [ $DOWNLOAD_OK -ne 0 ] || [ ! -s "$TMP_FW" ] || grep -Eq '^(<html|<!DOCTYPE)' "$TMP_FW" 2>/dev/null; then
     echo "failed:下载失败" > /tmp/online-upgrade-status
     echo "错误: 下载失败"
     exit 1
@@ -269,11 +275,12 @@ if [ "$MODE" = "upgrade" ]; then
     BACKUP=""
   fi
 
-  # 记录版本
+  # 记录版本 (先保存旧版本文件，sysupgrade 失败时回滚)
   echo "Step 3: 记录版本..."
   echo "saving_ts" > /tmp/online-upgrade-status
   FW_DATE=$(echo "$TAG" | grep -o '[0-9]\{12\}' | head -1)
   FW_RUNID=$(echo "$TAG" | sed 's/.*-//')
+  OLD_VERSION="$(cat "$VERSION_FILE" 2>/dev/null)"
   # 保持与 openwrt-actions 构建一致的格式: device YYYYMMDDHHMMSS run_id
   echo "${DEVICE} ${FW_DATE}00 ${FW_RUNID}" > "$VERSION_FILE"
   [ -n "$FW_DATE" ] && uci set online-upgrade.settings.last_upgrade_ts="$FW_DATE"
@@ -292,12 +299,18 @@ if [ "$MODE" = "upgrade" ]; then
     /sbin/sysupgrade "$TMP_FW"
   fi
 
-  # sysupgrade 失败
+  # sysupgrade 失败 (设备未重启才会执行到这里)
   echo "failed:sysupgrade 执行失败" > /tmp/online-upgrade-status
   uci -q delete online-upgrade.settings.last_upgrade_ts
   uci -q delete online-upgrade.settings.last_upgrade_tag
   uci -q delete online-upgrade.settings.last_upgrade_version
   uci commit online-upgrade
+  # 回滚版本文件，避免下次检查误判"已是最新"
+  if [ -n "$OLD_VERSION" ]; then
+    echo "$OLD_VERSION" > "$VERSION_FILE"
+  else
+    rm -f "$VERSION_FILE"
+  fi
   exit 1
 fi
 
@@ -305,6 +318,7 @@ fi
 if [ "$MODE" = "background" ] || [ "$MODE" = "--bg" ]; then
   ACTION="${2:-upgrade}"
   shift 2
+  # shift 2 后 $@ 为原 $3 起的参数 (如 --force)，action 已移出需重新拼接
   setsid /bin/sh "$0" "$ACTION" "$@" </dev/null >/tmp/online-upgrade.log 2>&1 &
   echo "${ACTION} 已在后台启动 (PID: $!)"
   exit 0
