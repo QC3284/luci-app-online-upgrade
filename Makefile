@@ -13,7 +13,7 @@ PKG_RELEASE:=1
 PKG_BUILD_TYPE ?= ipk
 
 PKG_MAINTAINER:=gooyjq <gooyjq@users.noreply.github.com>
-PKG_LICENSE:=GPL-2.0-only
+PKG_LICENSE:=GPL-2.0-or-later
 PKG_LICENSE_FILES:=LICENSE
 
 LUCI_DEPENDS:=+curl +jsonfilter +luci-base +luci-lua-runtime
@@ -74,16 +74,9 @@ define Package/luci-app-online-upgrade/install
 	$(INSTALL_DATA) ./root/usr/share/rpcd/acl.d/luci-app-online-upgrade.json \
 		$(1)/usr/share/rpcd/acl.d/luci-app-online-upgrade.json
 
-	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/model/cbi/admin_system
-	$(INSTALL_DATA) ./root/usr/lib/lua/luci/model/cbi/admin_system/online_upgrade.lua \
-		$(1)/usr/lib/lua/luci/model/cbi/admin_system/online_upgrade.lua
-
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/system
 	$(INSTALL_DATA) ./root/www/luci-static/resources/view/system/online-upgrade.js \
 		$(1)/www/luci-static/resources/view/system/online-upgrade.js
-
-	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/i18n
-	$(INSTALL_DATA) ./po/zh-cn/online-upgrade.po $(1)/usr/lib/lua/luci/i18n/online-upgrade.zh-cn.po
 endef
 
 define Package/luci-app-online-upgrade/postinst

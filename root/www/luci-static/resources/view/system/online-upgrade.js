@@ -401,7 +401,7 @@ return view.extend({
 
 // ======== 构建页面 ========
 		return E('div', {'class': 'cbi-map'}, [
-			E('h2', {'class': 'cbi-page-title'}, '固件在线升级 (备份超时≠失败，请查看日志)'),
+			E('h2', {'class': 'cbi-page-title'}, '固件在线升级'),
 
 			// 状态卡片
 			E('div', {'class': 'cbi-section', style: 'margin-bottom:16px;padding:20px;'}, [

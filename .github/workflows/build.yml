@@ -24,9 +24,9 @@ jobs:
         run: |
           SDK23_URL="https://downloads.immortalwrt.org/releases/23.05.4/targets/x86/64/immortalwrt-sdk-23.05.4-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
           SDK25_URL="https://downloads.immortalwrt.org/releases/25.12.0/targets/x86/64/immortalwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
-          # 并行下载
-          curl -sL --retry 5 --retry-delay 10 "$SDK23_URL" -o sdk23.tar.xz &
-          curl -sL --retry 5 --retry-delay 10 "$SDK25_URL" -o sdk25.tar.zst &
+          # 并行下载 (-f: HTTP 错误视为失败)
+          curl -fsL --retry 5 --retry-delay 10 "$SDK23_URL" -o sdk23.tar.xz &
+          curl -fsL --retry 5 --retry-delay 10 "$SDK25_URL" -o sdk25.tar.zst &
           wait
           echo "✅ SDKs downloaded"
       - name: Extract SDKs
@@ -56,7 +56,6 @@ jobs:
         run: |
           cd sdk23
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
-        continue-on-error: true
 
       - name: Save .ipk
         run: |
@@ -85,7 +84,6 @@ jobs:
         run: |
           cd sdk25
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
-        continue-on-error: true
 
       - name: Save .apk
         run: |
@@ -99,8 +97,8 @@ jobs:
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: v1.0.${{ github.run_number }}
+          tag_name: v2.0.${{ github.run_number }}
+          name: v2.0.${{ github.run_number }}
           body: |
             自动编译的插件包
 
