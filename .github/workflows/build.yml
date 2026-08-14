@@ -22,13 +22,33 @@ jobs:
       # ---------- 2. 并行下载两个 SDK ----------
       - name: Download SDKs (parallel)
         run: |
-          SDK23_URL="https://downloads.immortalwrt.org/releases/23.05.4/targets/x86/64/immortalwrt-sdk-23.05.4-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-          SDK25_URL="https://downloads.immortalwrt.org/releases/25.12.0/targets/x86/64/immortalwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
-          # 并行下载 (-f: HTTP 错误视为失败)
-          curl -fsL --retry 5 --retry-delay 10 "$SDK23_URL" -o sdk23.tar.xz &
-          curl -fsL --retry 5 --retry-delay 10 "$SDK25_URL" -o sdk25.tar.zst &
-          wait
+          SDK23_REL="releases/23.05.4/targets/x86/64/immortalwrt-sdk-23.05.4-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          SDK25_REL="releases/25.12.0/targets/x86/64/immortalwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
+          # 官方源卡住时自动回退镜像; 低速/断流自动重试并断点续传
+          SDK_BASES="https://downloads.immortalwrt.org https://mirrors.ustc.edu.cn/immortalwrt https://mirror.sjtu.edu.cn/immortalwrt"
+
+          fetch_sdk() {
+            local rel="$1" out="$2"
+            for base in $SDK_BASES; do
+              echo ">>> downloading $base/$rel"
+              if curl -fsSL --connect-timeout 30 --speed-limit 102400 --speed-time 60 \
+                   --retry 3 --retry-delay 10 --retry-all-errors -C - -o "$out" "$base/$rel"; then
+                return 0
+              fi
+              rm -f "$out"
+            done
+            return 1
+          }
+
+          # 并行下载
+          fetch_sdk "$SDK23_REL" sdk23.tar.xz &
+          PID23=$!
+          fetch_sdk "$SDK25_REL" sdk25.tar.zst &
+          PID25=$!
+          wait "$PID23" || { echo "❌ SDK 23.05 download failed"; exit 1; }
+          wait "$PID25" || { echo "❌ SDK 25.12 download failed"; exit 1; }
           echo "✅ SDKs downloaded"
+          ls -lh sdk23.tar.xz sdk25.tar.zst
       - name: Extract SDKs
         run: |
           # 串行解压（避免移动时的竞态）
