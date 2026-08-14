@@ -23,10 +23,10 @@ get_device() {
   local dev=$(get_uci device)
   [ -n "$dev" ] && { echo "$dev"; return; }
   # 从 /etc/board.json 读取
-  dev=$(jsonfilter -e '@.model.id' < /etc/board.json 2>/dev/null | tr ',' '_' | tr '[:upper:]' '[:lower:]')
+  dev=$(jsonfilter -e '@.model.id' < /etc/board.json 2>/dev/null | tr ' ,/' '_' | tr '[:upper:]' '[:lower:]')
   [ -n "$dev" ] && { echo "$dev"; return; }
   # 回退：从 /proc/device-tree/compatible 读取第一个
-  dev=$(cat /proc/device-tree/compatible 2>/dev/null | tr '\0' '\n' | tail -1 | tr ',' '_' | tr '[:upper:]' '[:lower:]')
+  dev=$(cat /proc/device-tree/compatible 2>/dev/null | tr '\0' '\n' | tail -1 | tr ' ,/' '_' | tr '[:upper:]' '[:lower:]')
   [ -n "$dev" ] && { echo "$dev"; return; }
   echo "unknown"
 }
@@ -88,20 +88,25 @@ find_firmware() {
   # === Phase 2: GitHub API Fallback (Atom/HTML 失败或代理不支持网页时) ===
   echo "  尝试 GitHub API..."
   json="/tmp/releases.json"
-  curl -sL --connect-timeout 10 -H "User-Agent: online-upgrade" -o "$json" \
-    "https://api.github.com/repos/${REPO}/releases?per_page=30" 2>/dev/null
-  if [ ! -s "$json" ] && [ -n "$PROXY" ]; then
-    curl -sL --connect-timeout 15 -H "User-Agent: online-upgrade" -o "$json" \
-      "${PROXY}https://api.github.com/repos/${REPO}/releases?per_page=30" 2>/dev/null
-  fi
+  hdrs="/tmp/releases.headers"
+  api_url="https://api.github.com/repos/${REPO}/releases?per_page=100"
+  page=1
+  found=""
+  # 最多翻 3 页 (300 个 release), 覆盖多设备仓库中较久未更新的设备
+  while [ "$page" -le 3 ] && [ -z "$found" ]; do
+    curl -sL --connect-timeout 10 -D "$hdrs" -H "User-Agent: online-upgrade" -o "$json" "$api_url" 2>/dev/null
+    if [ ! -s "$json" ] && [ -n "$PROXY" ]; then
+      curl -sL --connect-timeout 15 -D "$hdrs" -H "User-Agent: online-upgrade" -o "$json" "${PROXY}${api_url}" 2>/dev/null
+    fi
+    [ -s "$json" ] || break
 
-  if [ -s "$json" ]; then
     # 检测限速错误 (GitHub API 未认证 60次/小时)
     if grep -q 'rate limit' "$json" 2>/dev/null; then
       echo "错误: GitHub API 访问超60次/小时受限"
-      rm -f "$json"
+      rm -f "$json" "$hdrs"
       return 1
     fi
+
     # 从 JSON 中找到匹配设备的第一个 release tag
     tag=$(grep -o '"tag_name": *"[^"]*"' "$json" 2>/dev/null \
       | grep "${DEVICE}-" | head -1 \
@@ -113,16 +118,35 @@ find_firmware() {
         | grep "/download/${tag}/" \
         | grep "squashfs-sysupgrade" | grep -v manifest | head -1 \
         | sed 's/.*"browser_download_url": *"\([^"]*\)".*/\1/')
-      rm -f "$json"
       if [ -n "$fw_url" ]; then
-        fw_name=$(basename "$fw_url" 2>/dev/null || echo "$fw_url" | sed 's|.*/||')
-        echo "  固件: ${fw_name}"
-        echo "TAG=${tag}" > /tmp/.online-upgrade.env
-        echo "FW_URL=${fw_url}" >> /tmp/.online-upgrade.env
-        echo "FW_NAME=${fw_name}" >> /tmp/.online-upgrade.env
-        return 0
+        # 同资产对象内提取 size/digest (字段位于 browser_download_url 之前, 仅紧凑 JSON 格式有效)
+        esc_url=$(echo "$fw_url" | sed 's|\.|\\.|g')
+        seg=$(grep -o '"size": *[0-9]*,[^}]*"browser_download_url": *"'$esc_url'"' "$json" | head -1)
+        FW_SIZE=$(echo "$seg" | sed 's/.*"size": *\([0-9]*\).*/\1/')
+        FW_SHA256=$(echo "$seg" | sed 's/.*"digest": *"\([^"]*\)".*/\1/')
+        found=1
       fi
     fi
+
+    if [ -z "$found" ]; then
+      # 取下一页 (GitHub API Link 响应头)
+      api_url=$(grep -i '^link:' "$hdrs" 2>/dev/null | grep -o '<[^>]*>; rel="next"' | head -1 | sed 's/^<//;s/>; rel="next"//')
+      [ -n "$api_url" ] || break
+      page=$((page+1))
+    fi
+  done
+  rm -f "$hdrs"
+
+  if [ -n "$found" ]; then
+    fw_name=$(basename "$fw_url" 2>/dev/null || echo "$fw_url" | sed 's|.*/||')
+    echo "  固件: ${fw_name}"
+    echo "TAG=${tag}" > /tmp/.online-upgrade.env
+    echo "FW_URL=${fw_url}" >> /tmp/.online-upgrade.env
+    echo "FW_NAME=${fw_name}" >> /tmp/.online-upgrade.env
+    [ -n "$FW_SIZE" ] && echo "FW_SIZE=${FW_SIZE}" >> /tmp/.online-upgrade.env
+    [ -n "$FW_SHA256" ] && echo "FW_SHA256=${FW_SHA256}" >> /tmp/.online-upgrade.env
+    rm -f "$json"
+    return 0
   fi
   rm -f "$json"
 
@@ -150,20 +174,8 @@ is_newer() {
   return 0
 }
 
-# ===== 区域检测 (仅 check/upgrade 时调用) =====
-detect_region() {
-  local cc
-  cc=$(curl -s --connect-timeout 3 "http://ip-api.com/json/?fields=countryCode" 2>/dev/null | jsonfilter -e '@.countryCode' 2>/dev/null)
-  [ "$cc" = "CN" ] && return 0 || return 1
-}
-
 # ===== 检查模式 =====
 if [ "$MODE" = "check" ] || [ "$MODE" = "status" ]; then
-  # 国内网络检测并强制启用代理
-  if detect_region; then
-    echo "  检测到国内网络，强制启用代理"
-    [ -z "$(get_uci proxy)" ] && PROXY="https://ghfast.top/"
-  fi
   find_firmware
   if [ $? -ne 0 ] || [ ! -f /tmp/.online-upgrade.env ]; then
     echo "错误: 无法获取固件信息"
@@ -176,10 +188,12 @@ if [ "$MODE" = "check" ] || [ "$MODE" = "status" ]; then
   echo "最新固件: ${TAG}"
   echo "新固件版本: ${FW_NAME}"
 
-  # 尝试获取文件大小 (HEAD 请求，先直连后代理)
-  FW_SIZE=$(curl -sI --connect-timeout 5 -H "User-Agent: online-upgrade" "$FW_URL" 2>/dev/null | grep -i 'content-length' | awk '{print $2}' | tr -d '\r')
+  # 尝试获取文件大小 (API 结果自带 size; 否则 HEAD 请求, 先直连后代理, -L 跟随重定向)
+  if [ -z "$FW_SIZE" ]; then
+    FW_SIZE=$(curl -sIL --connect-timeout 5 -H "User-Agent: online-upgrade" "$FW_URL" 2>/dev/null | grep -i 'content-length' | awk '{print $2}' | tr -d '\r' | tail -1)
+  fi
   if [ -z "$FW_SIZE" ] && [ -n "$PROXY" ]; then
-    FW_SIZE=$(curl -sI --connect-timeout 8 -H "User-Agent: online-upgrade" "${PROXY}${FW_URL}" 2>/dev/null | grep -i 'content-length' | awk '{print $2}' | tr -d '\r')
+    FW_SIZE=$(curl -sIL --connect-timeout 8 -H "User-Agent: online-upgrade" "${PROXY}${FW_URL}" 2>/dev/null | grep -i 'content-length' | awk '{print $2}' | tr -d '\r' | tail -1)
   fi
   if [ -n "$FW_SIZE" ] && [ "$FW_SIZE" -gt 0 ] 2>/dev/null; then
     if [ "$FW_SIZE" -ge 1048576 ] 2>/dev/null; then
@@ -213,11 +227,6 @@ fi
 if [ "$MODE" = "upgrade" ]; then
   # 先写初始状态, 避免上一次失败状态残留导致前端误判
   echo "starting" > /tmp/online-upgrade-status
-  # 国内网络检测并强制启用代理
-  if detect_region; then
-    echo "  检测到国内网络，强制启用代理"
-    [ -z "$(get_uci proxy)" ] && PROXY="https://ghfast.top/"
-  fi
   find_firmware
   if [ $? -ne 0 ] || [ ! -f /tmp/.online-upgrade.env ]; then
     echo "错误: 无法获取固件信息，升级中止"
@@ -259,6 +268,19 @@ if [ "$MODE" = "upgrade" ]; then
     exit 1
   fi
   echo "  下载成功 ($(du -h "$TMP_FW" | cut -f1))"
+
+  # 校验 sha256 (GitHub API 资产自带 digest)
+  if [ -n "$FW_SHA256" ]; then
+    echo "  校验固件 sha256..."
+    printf '%s  %s\n' "${FW_SHA256#sha256:}" "$TMP_FW" | sha256sum -c - 2>/dev/null
+    if [ $? -ne 0 ]; then
+      echo "failed:固件 sha256 校验失败" > /tmp/online-upgrade-status
+      echo "错误: 固件 sha256 校验失败，升级中止"
+      rm -f "$TMP_FW"
+      exit 1
+    fi
+    echo "  sha256 校验通过"
+  fi
 
   # 备份 (根据 keep_config 设置)
   KEEP_CONFIG=$(get_uci keep_config)

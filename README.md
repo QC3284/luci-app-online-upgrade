@@ -10,7 +10,7 @@ ImmortalWrt / OpenWrt LuCI 插件 —— 从 GitHub Releases 在线检查并升�
 - 检查更新：按固件构建时间戳比较版本（本地 `/etc/firmware-build-info` vs Release tag）
 - 一键在线升级：下载固件 → 备份配置 → sysupgrade 刷写并恢复配置
 - 强制更新：即使已是最新版本也可重新刷写
-- 支持 GitHub 下载代理，检测到国内网络时自动启用
+- 支持 GitHub 下载代理（直连失败自动走代理）
 - 备份管理：创建配置备份、下载备份到本地、自动恢复 / 手动上传恢复
 - 同时支持 opkg（.ipk）与 apk（.apk）两种包格式
 
@@ -76,9 +76,9 @@ config online-upgrade 'settings'
 ## 工作原理
 
 - **设备识别**：UCI `device` 优先，其次 `/etc/board.json` 的 `model.id`，最后回退 `/proc/device-tree/compatible`
-- **查找固件**：优先 Atom feed + expanded_assets（直连，失败走代理），再回退 GitHub API；按设备名匹配 tag、按 `squashfs-sysupgrade` 匹配资产文件
+- **查找固件**：优先 Atom feed + expanded_assets（直连，失败走代理），再回退 GitHub API（每页 100 条、最多翻 3 页）；按设备名匹配 tag、按 `squashfs-sysupgrade` 匹配资产文件
 - **版本比较**：比较本地 `/etc/firmware-build-info` 与在线 tag 中的 12 位构建时间戳；无本地版本文件时首次检测视为有新固件
-- **升级流程**：curl 下载（直连失败自动走代理）→ `sysupgrade -b` 备份到 `/tmp` 与 `/root` → `sysupgrade -f <备份> <固件>` 刷写并恢复配置
+- **升级流程**：curl 下载（直连失败自动走代理）→ sha256 校验（GitHub API digest）→ `sysupgrade -b` 备份到 `/tmp` 与 `/root` → `sysupgrade -f <备份> <固件>` 刷写并恢复配置
 - **状态与日志**：升级状态写入 `/tmp/online-upgrade-status`，后台升级日志写入 `/tmp/online-upgrade.log`
 
 ## 许可证
