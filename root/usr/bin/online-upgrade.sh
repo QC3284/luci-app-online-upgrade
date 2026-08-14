@@ -47,7 +47,8 @@ find_firmware() {
   echo "  正在获取 Release 列表..."
   curl -sL --connect-timeout 10 -H "User-Agent: online-upgrade" -o "$feed" \
     "https://github.com/${REPO}/releases.atom" 2>/dev/null
-  if [ ! -s "$feed" ] && [ -n "$PROXY" ]; then
+  # 校验 feed 有效性: GitHub 错误页也是非空 HTML, 需包含 release tag 链接才有效
+  if { [ ! -s "$feed" ] || ! grep -q "releases/tag" "$feed" 2>/dev/null; } && [ -n "$PROXY" ]; then
     curl -sL --connect-timeout 15 -H "User-Agent: online-upgrade" -o "$feed" \
       "${PROXY}https://github.com/${REPO}/releases.atom" 2>/dev/null
   fi
@@ -58,10 +59,12 @@ find_firmware() {
     if [ -n "$tag" ]; then
       echo "  最新 Tag: ${tag}"
       html="/tmp/assets.html"
-      curl -sL --connect-timeout 10 -H "User-Agent: online-upgrade" -o "$html" \
+      # expanded_assets 是 XHR 接口, 必须带 X-Requested-With 头, 否则返回 404 页
+      curl -sL --connect-timeout 10 -H "User-Agent: online-upgrade" -H "X-Requested-With: XMLHttpRequest" -o "$html" \
         "https://github.com/${REPO}/releases/expanded_assets/${tag}" 2>/dev/null
-      if [ ! -s "$html" ] && [ -n "$PROXY" ]; then
-        curl -sL --connect-timeout 15 -H "User-Agent: online-upgrade" -o "$html" \
+      # 校验页面有效性: GitHub 404 页也是非空 HTML, 需包含下载链接才有效
+      if { [ ! -s "$html" ] || ! grep -q "releases/download" "$html" 2>/dev/null; } && [ -n "$PROXY" ]; then
+        curl -sL --connect-timeout 15 -H "User-Agent: online-upgrade" -H "X-Requested-With: XMLHttpRequest" -o "$html" \
           "${PROXY}https://github.com/${REPO}/releases/expanded_assets/${tag}" 2>/dev/null
       fi
       if [ -s "$html" ]; then
@@ -208,6 +211,8 @@ fi
 
 # ===== 升级模式 =====
 if [ "$MODE" = "upgrade" ]; then
+  # 先写初始状态, 避免上一次失败状态残留导致前端误判
+  echo "starting" > /tmp/online-upgrade-status
   # 国内网络检测并强制启用代理
   if detect_region; then
     echo "  检测到国内网络，强制启用代理"
