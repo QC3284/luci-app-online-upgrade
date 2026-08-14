@@ -14,76 +14,103 @@ return view.extend({
 		var _this = this;
 		var pollTimer = null;
 
+		function parseCheckOutput(text) {
+			var resultEl = document.getElementById('check-result');
+			if (!resultEl) return;
+
+			if (text.indexOf('发现新固件') >= 0) {
+				resultEl.textContent = '✅ 发现新固件！';
+				resultEl.style.color = '';
+				var upgBtn = document.getElementById('btn-upgrade');
+				var forceBtn = document.getElementById('btn-force');
+				if (upgBtn) upgBtn.style.display = 'inline-block';
+				if (forceBtn) forceBtn.style.display = 'none';
+			} else if (text.indexOf('403') >= 0 || text.indexOf('60次') >= 0) {
+				resultEl.textContent = '❌ 检查失败 - 访问超60次/小时受限';
+				resultEl.style.color = '';
+				var forceBtn = document.getElementById('btn-force');
+				if (forceBtn) forceBtn.style.display = 'inline-block';
+			} else if (text.indexOf('错误') >= 0) {
+				resultEl.textContent = '❌ 检查失败';
+				resultEl.style.color = '';
+				var forceBtn = document.getElementById('btn-force');
+				if (forceBtn) forceBtn.style.display = 'inline-block';
+			} else {
+				resultEl.textContent = '✓ 已是最新';
+				resultEl.style.color = '#4CAF50';
+				var forceBtn = document.getElementById('btn-force');
+				if (forceBtn) forceBtn.style.display = 'inline-block';
+				var upgBtn = document.getElementById('btn-upgrade');
+				if (upgBtn) upgBtn.style.display = 'none';
+			}
+
+			// 解析并显示版本信息
+			var lines = text.split('\n');
+			for (var i = 0; i < lines.length; i++) {
+				var m = lines[i].match(/最新固件:\s*(\S+)/);
+				if (m) {
+					var el = document.getElementById('latest-ver');
+					if (el) el.textContent = m[1];
+				}
+				m = lines[i].match(/文件大小:\s*(.+)/);
+				if (m) {
+					var el = document.getElementById('latest-size');
+					if (el) el.textContent = m[1].trim();
+				}
+				// 新版本号
+				m = lines[i].match(/新固件版本:\s*(.+)/);
+				if (m) {
+					var el = document.getElementById('new-ver');
+					if (el) el.textContent = m[1].trim();
+				}
+				// 检测依据
+				m = lines[i].match(/检测依据:\s*(.+)/);
+				if (m) {
+					var el = document.getElementById('check-reason');
+					if (el) el.textContent = m[1].trim();
+				}
+			}
+		}
+
+		// 轮询后台任务日志, 等待 ===TASK_DONE=== 结束标记
+		// (LuCI rpc 默认超时仅 20 秒, 同步执行检查/备份会必然超时, 因此改为后台+轮询)
+		function pollTaskLog(onDone, onTimeout) {
+			var polls = 0;
+			var timer = setInterval(function() {
+				polls++;
+				fs.read('/tmp/online-upgrade.log').then(function(data) {
+					var text = (data || '').toString();
+					if (text.indexOf('===TASK_DONE===') >= 0) {
+						clearInterval(timer);
+						onDone(text.replace('===TASK_DONE===', ''));
+					} else if (polls >= 100) {
+						clearInterval(timer);
+						onTimeout();
+					}
+				}).catch(function() {});
+			}, 1500);
+		}
+
 		function runCheck() {
 			var btn = document.getElementById('btn-check');
 			if (!btn) return;
 			btn.disabled = true;
 			btn.textContent = '检查中...';
-			updateOutput('正在检查固件更新，请稍候...\n');
+			updateOutput('正在检查固件更新，请稍候（国内网络最长约 2 分钟）...\n');
 
-			fs.exec('/usr/bin/online-upgrade.sh', ['check']).then(function(r) {
-				var text = r.stdout + (r.stderr ? '\n' + r.stderr : '');
-				updateOutput(text);
-				btn.disabled = false;
-				btn.textContent = '检查更新';
-
-				var resultEl = document.getElementById('check-result');
-				if (!resultEl) return;
-
-				if (text.indexOf('发现新固件') >= 0) {
-					resultEl.textContent = '✅ 发现新固件！';
-					resultEl.style.color = '';
-					var upgBtn = document.getElementById('btn-upgrade');
-					var forceBtn = document.getElementById('btn-force');
-					if (upgBtn) upgBtn.style.display = 'inline-block';
-					if (forceBtn) forceBtn.style.display = 'none';
-				} else if (text.indexOf('403') >= 0 || text.indexOf('60次') >= 0) {
-					resultEl.textContent = '❌ 检查失败 - 访问超60次/小时受限';
-					resultEl.style.color = '';
-					var forceBtn = document.getElementById('btn-force');
-					if (forceBtn) forceBtn.style.display = 'inline-block';
-				} else if (text.indexOf('错误') >= 0) {
-					resultEl.textContent = '❌ 检查失败';
-					resultEl.style.color = '';
-					var forceBtn = document.getElementById('btn-force');
-					if (forceBtn) forceBtn.style.display = 'inline-block';
-				} else {
-					resultEl.textContent = '✓ 已是最新';
-					resultEl.style.color = '#4CAF50';
-					var forceBtn = document.getElementById('btn-force');
-					if (forceBtn) forceBtn.style.display = 'inline-block';
-					var upgBtn = document.getElementById('btn-upgrade');
-					if (upgBtn) upgBtn.style.display = 'none';
-				}
-
-				// 解析并显示版本信息
-				var lines = text.split('\n');
-				for (var i = 0; i < lines.length; i++) {
-					var m = lines[i].match(/最新固件:\s*(\S+)/);
-					if (m) {
-						var el = document.getElementById('latest-ver');
-						if (el) el.textContent = m[1];
-					}
-					m = lines[i].match(/文件大小:\s*(.+)/);
-					if (m) {
-						var el = document.getElementById('latest-size');
-						if (el) el.textContent = m[1].trim();
-					}
-					// 新版本号
-					m = lines[i].match(/新固件版本:\s*(.+)/);
-					if (m) {
-						var el = document.getElementById('new-ver');
-						if (el) el.textContent = m[1].trim();
-					}
-					// 检测依据
-					m = lines[i].match(/检测依据:\s*(.+)/);
-					if (m) {
-						var el = document.getElementById('check-reason');
-						if (el) el.textContent = m[1].trim();
-					}
-				}
+			fs.exec('/usr/bin/online-upgrade.sh', ['background', 'check']).then(function() {
+				pollTaskLog(function(text) {
+					btn.disabled = false;
+					btn.textContent = '检查更新';
+					updateOutput(text);
+					parseCheckOutput(text);
+				}, function() {
+					btn.disabled = false;
+					btn.textContent = '检查更新';
+					updateOutput('⚠️ 检查超时，请稍后重试或登录路由器查看 /tmp/online-upgrade.log\n');
+				});
 			}).catch(function(e) {
-				updateOutput('检测失败: ' + e.message);
+				updateOutput('检测失败: ' + e.message + '\n');
 				btn.disabled = false;
 				btn.textContent = '检查更新';
 			});
@@ -183,12 +210,21 @@ return view.extend({
 		function runForceUpgrade() { startUpgrade(true); }
 
 		function runBackup() {
+			var btn = document.getElementById('btn-backup');
 			updateOutput('正在创建配置备份...\n');
-			fs.exec('/usr/bin/online-upgrade.sh', ['backup']).then(function(r) {
-				updateOutput(r.stdout + (r.stderr ? '\n' + r.stderr : '') + '\n');
-				// 刷新备份信息
-				refreshBackupInfo();
+			if (btn) btn.disabled = true;
+			fs.exec('/usr/bin/online-upgrade.sh', ['background', 'backup']).then(function() {
+				pollTaskLog(function(text) {
+					if (btn) btn.disabled = false;
+					updateOutput(text + '\n');
+					// 刷新备份信息
+					refreshBackupInfo();
+				}, function() {
+					if (btn) btn.disabled = false;
+					updateOutput('⚠️ 备份超时，请稍后查看 /tmp/online-upgrade.log\n');
+				});
 			}).catch(function(e) {
+				if (btn) btn.disabled = false;
 				updateOutput('❌ 备份失败: ' + e.message + '\n');
 			});
 		}

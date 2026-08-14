@@ -5,6 +5,7 @@
 			"cgi-io": [ "exec" ],
 			"file": {
 				"/tmp/online-upgrade-status": [ "read" ],
+				"/tmp/online-upgrade.log": [ "read" ],
 				"/tmp/pre-upgrade-backup-*": [ "read" ],
 				"/root/pre-upgrade-backup-*": [ "read" ],
 				"/etc/firmware-build-info": [ "read" ],

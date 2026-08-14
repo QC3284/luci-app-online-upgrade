@@ -164,6 +164,7 @@ if [ "$MODE" = "check" ] || [ "$MODE" = "status" ]; then
   find_firmware
   if [ $? -ne 0 ] || [ ! -f /tmp/.online-upgrade.env ]; then
     echo "错误: 无法获取固件信息"
+    echo "===TASK_DONE==="
     exit 1
   fi
   . /tmp/.online-upgrade.env
@@ -201,6 +202,7 @@ if [ "$MODE" = "check" ] || [ "$MODE" = "status" ]; then
     echo "  已是最新。"
     echo "检测依据: 已是最新版本"
   fi
+  echo "===TASK_DONE==="
   exit 0
 fi
 
@@ -342,8 +344,10 @@ if [ "$MODE" = "backup" ] || [ "$MODE" = "--backup" ]; then
     fi
   else
     echo "错误: 备份失败！"
+    echo "===TASK_DONE==="
     exit 1
   fi
+  echo "===TASK_DONE==="
   exit 0
 fi
 
