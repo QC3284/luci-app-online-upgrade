@@ -1,6 +1,6 @@
 # LuCI configuration for online-upgrade
 
 config online-upgrade 'settings'
-	option repo 'gooyjq/ImmortalWrt-Builder'
+	option repo 'QC3284/openwrt-actions'
 	option proxy 'https://ghfast.top/'
 	option keep_config '1'

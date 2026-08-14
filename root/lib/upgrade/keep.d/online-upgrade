@@ -1,5 +1,3 @@
 /etc/config/online-upgrade
 /etc/config/sysupgrade.tgz
-/etc/uci-defaults/90-online-upgrade-auto
-/root/.pkg-list.txt
 /www/cgi-bin/online-upgrade-restore
