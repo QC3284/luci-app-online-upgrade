@@ -47,7 +47,8 @@ jobs:
       - name: Install feeds (SDK 23.05)
         run: |
           cd sdk23
-          ./scripts/feeds update luci --depth 1
+          # luci 包的编译依赖头文件 (lua.h / ucode/module.h / netlink/msg.h) 来自 packages feed
+          ./scripts/feeds update luci packages
           ./scripts/feeds install -a
           make defconfig
 
@@ -75,7 +76,8 @@ jobs:
       - name: Install feeds (SDK 25.12)
         run: |
           cd sdk25
-          ./scripts/feeds update luci --depth 1
+          # luci 包的编译依赖头文件 (lua.h / ucode/module.h / netlink/msg.h) 来自 packages feed
+          ./scripts/feeds update luci packages
           ./scripts/feeds install -a
           make defconfig
 
