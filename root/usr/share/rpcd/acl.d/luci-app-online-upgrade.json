@@ -13,6 +13,7 @@
 				"/etc/config/sysupgrade.tgz": [ "read" ],
 				"/lib/upgrade/keep.d/online-upgrade": [ "read" ],
 				"/usr/bin/online-upgrade.sh": [ "exec" ],
+				"/sbin/uci": [ "exec" ],
 				"/bin/cat": [ "exec" ],
 				"/bin/sh": [ "exec" ],
 				"/bin/date": [ "exec" ],

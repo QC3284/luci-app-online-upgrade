@@ -16,7 +16,7 @@ PKG_MAINTAINER:=gooyjq <gooyjq@users.noreply.github.com>
 PKG_LICENSE:=GPL-2.0-only
 PKG_LICENSE_FILES:=LICENSE
 
-LUCI_DEPENDS:=+curl +jsonfilter
+LUCI_DEPENDS:=+curl +jsonfilter +luci-base +luci-lua-runtime
 
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/luci/luci.mk
@@ -34,6 +34,10 @@ define Package/luci-app-online-upgrade/description
 	Automatically check and upgrade ImmortalWrt/OpenWrt firmware
 	from GitHub Releases. Adapted for multi-device release list lookup. Supports custom repository, release tag,
 	download proxy, and configuration preservation.
+endef
+
+define Package/luci-app-online-upgrade/conffiles
+/etc/config/online-upgrade
 endef
 
 define Build/Prepare

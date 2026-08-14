@@ -1,32 +1,40 @@
 #!/bin/sh
 # uci-defaults for luci-app-online-upgrade — 适配 openwrt-actions
+# 仅当配置项缺失时写入默认值, 避免重装/升级后覆盖用户自定义配置
 
-uci -q batch <<-EOF
-	set online-upgrade.settings.repo='QC3284/openwrt-actions'
-	set online-upgrade.settings.proxy='https://ghfast.top/'
-	set online-upgrade.settings.keep_config='1'
-	commit online-upgrade
-EOF
+set_default() {
+  local opt="$1" val="$2"
+  [ -z "$(uci -q get "online-upgrade.settings.$opt")" ] && uci set "online-upgrade.settings.$opt=$val"
+}
 
-# 自动检测设备名并写入 UCI
-DEVICE=$(jsonfilter -e '@.model.id' < /etc/board.json 2>/dev/null | tr ',' '_' | tr '[:upper:]' '[:lower:]')
-if [ -z "$DEVICE" ]; then
-  DEVICE=$(cat /proc/device-tree/compatible 2>/dev/null | tr '\0' '\n' | tail -1 | tr ',' '_' | tr '[:upper:]' '[:lower:]')
+set_default repo 'QC3284/openwrt-actions'
+set_default proxy 'https://ghfast.top/'
+set_default keep_config '1'
+
+# 自动检测设备名并写入 UCI (仅在未手动指定时)
+if [ -z "$(uci -q get online-upgrade.settings.device)" ]; then
+  DETECTED=$(jsonfilter -e '@.model.id' < /etc/board.json 2>/dev/null | tr ' ,/' '_' | tr '[:upper:]' '[:lower:]')
+  if [ -z "$DETECTED" ]; then
+    DETECTED=$(cat /proc/device-tree/compatible 2>/dev/null | tr '\0' '\n' | tail -1 | tr ' ,/' '_' | tr '[:upper:]' '[:lower:]')
+  fi
+  [ -n "$DETECTED" ] && uci set online-upgrade.settings.device="$DETECTED"
 fi
-[ -n "$DEVICE" ] && uci set online-upgrade.settings.device="$DEVICE" && uci commit online-upgrade
+DEVICE=$(uci -q get online-upgrade.settings.device)
 
 # 初始化版本文件 (后续升级会更新)
 if [ ! -f /etc/firmware-build-info ]; then
-  echo "${DEVICE} $(date +%Y%m%d%H%M%S) initial" > /etc/firmware-build-info
+  echo "${DEVICE:-unknown} $(date +%Y%m%d%H%M%S) initial" > /etc/firmware-build-info
 fi
 
-# 从固件版本文件初始化 UCI 显示字段，格式与升级脚本保持一致
-if [ -f /etc/firmware-build-info ]; then
+# 从固件版本文件初始化 UCI 显示字段 (仅在未设置时)
+if [ -z "$(uci -q get online-upgrade.settings.last_upgrade_ts)" ] && [ -f /etc/firmware-build-info ]; then
   CUR_TS=$(awk '{print $2}' /etc/firmware-build-info 2>/dev/null | grep -o '[0-9]\{12\}' | head -1)
   CUR_RUNID=$(awk '{print $3}' /etc/firmware-build-info 2>/dev/null)
-  [ -n "$CUR_TS" ] && uci set online-upgrade.settings.last_upgrade_ts="$CUR_TS"
-  [ -n "$CUR_TS" ] && uci set online-upgrade.settings.last_upgrade_version="${DEVICE}-${CUR_TS}-${CUR_RUNID}"
-  uci commit online-upgrade
+  if [ -n "$CUR_TS" ]; then
+    uci set online-upgrade.settings.last_upgrade_ts="$CUR_TS"
+    uci set online-upgrade.settings.last_upgrade_version="${DEVICE}-${CUR_TS}-${CUR_RUNID}"
+  fi
 fi
 
+uci commit online-upgrade
 exit 0
