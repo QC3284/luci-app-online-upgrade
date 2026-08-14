@@ -24,7 +24,8 @@
 		},
 		"write": {
 			"file": {
-				"/etc/config/online-upgrade": [ "write" ]
+				"/etc/config/online-upgrade": [ "write" ],
+				"/tmp/manual-restore-upload.tar.gz": [ "write" ]
 			},
 			"uci": [ "online-upgrade" ]
 		}

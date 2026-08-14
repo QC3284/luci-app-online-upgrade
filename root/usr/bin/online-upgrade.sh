@@ -347,5 +347,43 @@ if [ "$MODE" = "backup" ] || [ "$MODE" = "--backup" ]; then
   exit 0
 fi
 
-echo "用法: online-upgrade.sh [check|upgrade|background|backup]"
+# ===== 恢复模式 (从上传/本地备份恢复配置) =====
+# 安全约束: 仅接受上传至 /tmp/manual-restore-upload.tar.gz 的备份,
+# 只允许恢复 etc/ 下的配置内容, 拒绝路径穿越与任意文件写入
+if [ "$MODE" = "restore" ] || [ "$MODE" = "--restore" ]; then
+  BAK_FILE="${2:-/tmp/manual-restore-upload.tar.gz}"
+  if [ ! -s "$BAK_FILE" ]; then
+    echo "ERROR: 备份文件不存在"
+    exit 0
+  fi
+  SIZE=$(wc -c < "$BAK_FILE" 2>/dev/null)
+  if [ -z "$SIZE" ] || [ "$SIZE" -gt 67108864 ] 2>/dev/null; then
+    echo "ERROR: 备份文件无效或过大 (超过 64MB)"
+    rm -f "$BAK_FILE"
+    exit 0
+  fi
+  if ! gzip -t "$BAK_FILE" 2>/dev/null; then
+    echo "ERROR: 文件不是有效的 gzip 压缩包"
+    rm -f "$BAK_FILE"
+    exit 0
+  fi
+  # 成员白名单: 仅允许相对路径 etc/ 下的条目; 拒绝 .. 与绝对路径
+  BAD_MEMBER=$(tar tzf "$BAK_FILE" 2>/dev/null | sed 's|^\./||' | grep -vE '^($|\./?|etc/.*)$' | head -1)
+  HAS_DOTS=$(tar tzf "$BAK_FILE" 2>/dev/null | grep -c '\.\.')
+  [ -z "$HAS_DOTS" ] && HAS_DOTS=0
+  if [ -n "$BAD_MEMBER" ] || [ "$HAS_DOTS" -gt 0 ]; then
+    echo "ERROR: 备份包含非配置目录内容或非法路径，已拒绝恢复"
+    rm -f "$BAK_FILE"
+    exit 0
+  fi
+  if cd / && tar xzf "$BAK_FILE" 2>/dev/null; then
+    echo "OK: 配置已恢复，建议重启路由器使配置生效"
+  else
+    echo "ERROR: 配置恢复失败"
+  fi
+  rm -f "$BAK_FILE"
+  exit 0
+fi
+
+echo "用法: online-upgrade.sh [check|upgrade|background|backup|restore]"
 exit 1

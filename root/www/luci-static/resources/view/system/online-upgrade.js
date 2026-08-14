@@ -2,6 +2,8 @@
 "require view";
 "require fs";
 "require ui";
+"require rpc";
+"require request";
 
 return view.extend({
 	handleSave: null,
@@ -233,7 +235,7 @@ return view.extend({
 				if (latestBackup) {
 					if (!confirm('确定从备份自动恢复配置？\n\n备份文件: ' + latestBackup + '\n\nsysupgrade 将使用此备份恢复所有配置（包括网络、WiFi、防火墙等）。')) return;
 					updateOutput('正在恢复配置 (使用 sysupgrade -f)...\n');
-					fs.exec('/bin/sh', ['-c', 'sysupgrade -f "' + latestBackup + '" && echo OK || echo FAIL']).then(function(r2) {
+					fs.exec('/bin/sh', ['-c', 'sysupgrade -r "' + latestBackup + '" && echo OK || echo FAIL']).then(function(r2) {
 						if (r2.stderr) updateOutput('警告: ' + r2.stderr + '\n');
 						var ok = (r2.stdout || '').indexOf('OK') >= 0;
 						if (ok) {
@@ -272,33 +274,39 @@ return view.extend({
 				return;
 			}
 
+			if (file.size > 64 * 1024 * 1024) {
+				updateOutput('❌ 备份文件过大 (超过 64MB)\n');
+				return;
+			}
+
 			if (!confirm('确定从本地文件恢复配置？\n\n文件: ' + file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)\n\n将上传该备份文件到路由器并恢复配置。')) return;
 
 			updateOutput('正在上传备份文件 (' + file.name + ')...\n');
 
-			var reader = new FileReader();
-			reader.onload = function(e) {
-				var arrayBuffer = e.target.result;
+			var data = new FormData();
+			data.append('sessionid', rpc.getSessionID());
+			data.append('filename', '/tmp/manual-restore-upload.tar.gz');
+			data.append('filedata', file);
 
-				updateOutput('正在执行恢复...\n');
-				fetch('/cgi-bin/online-upgrade-restore', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/octet-stream' },
-					body: arrayBuffer
-				}).then(function(resp) {
-					return resp.text();
-				}).then(function(text) {
+			request.post(L.env.cgi_base + '/cgi-upload', data, { timeout: 0 }).then(function(res) {
+				var reply = res.json();
+				if (L.isObject(reply) && reply.failure) {
+					updateOutput('❌ 上传失败: ' + reply.message + '\n');
+					return;
+				}
+				updateOutput('上传完成，正在校验并恢复...\n');
+				return fs.exec('/usr/bin/online-upgrade.sh', ['restore']).then(function(r) {
+					var text = (r.stdout || '') + (r.stderr ? '\n' + r.stderr : '');
 					var isOk = text.indexOf('OK:') === 0;
-					var msg = text.replace(/^(OK|ERROR):/, '');
+					var msg = text.replace(/^(OK|ERROR):/, '').trim();
 					updateOutput((isOk ? '✅ ' : '❌ ') + msg + '\n');
 					if (isOk) {
 						ui.addNotification(null, E('p', '✅ 配置已从本地上传的备份文件恢复'), 'info');
 					}
-				}).catch(function(err) {
-					updateOutput('❌ 上传失败: ' + err.message + '\n');
 				});
-			};
-			reader.readAsArrayBuffer(file);
+			}).catch(function(err) {
+				updateOutput('❌ 上传失败: ' + err.message + '\n');
+			});
 		}
 
 		function updateOutput(t) {
